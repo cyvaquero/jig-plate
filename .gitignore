@@ -1,0 +1,58 @@
+# jig-plate .gitignore file
+#
+
+## jig-plate Patterns
+/roles/*
+/output/
+/images/
+*.stl
+.venv/
+
+## Python Patterns
+.venv/
+__pycache__/
+*.pyc
+
+## General Blob Patterns
+*.bz2
+*.gz
+*.gzip
+*.rar
+*.tgz
+*.tar
+*.zip
+
+
+## Linux Patterns
+.directory
+.env
+
+
+### Vim
+*~
+*.swp
+*.swo
+
+
+## OSX Patterns
+.DS_Store
+packages
+Play.Tests/IntegrationTestUrl.cs
+
+
+## Sublime Text Patterns
+*.sublime-project
+*.sublime-workspace
+
+
+## VS Code Patterns
+*.code-workspace
+
+
+## Windows Patterns
+
+### Windows image file caches
+Thumbs.db
+
+### Folder config file
+Desktop.ini
