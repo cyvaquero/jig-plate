@@ -31,7 +31,7 @@ technical drawings.
 
 | | |
 |---|---|
-| **Plate** | 246 × 218 × 9 mm (10 mm at the corner stacking ribs) |
+| **Plate** | 246 × 218 × 9 mm (10.5 mm at the corner stacking ribs) |
 
 ## Requirements
 
