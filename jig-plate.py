@@ -11,6 +11,10 @@ script.
 Changelog
   0.1.0  base design -- magnet bores and corner stacking rib/groove system,
          debossed "Jig Plate" wordmark, no pocket geometry
+  1.0.0  first stable release -- script and documentation reviewed, no
+         geometry changes; dead code removed from the stacking-joint
+         detail drawing; documentation figure/filename inconsistencies
+         corrected
 """
 from pathlib import Path
 
@@ -23,7 +27,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.patches import FancyBboxPatch
 
-VERSION = "0.1.0"
+VERSION = "1.0.0"
 OUT_DIR = Path(__file__).resolve().parent / "output"
 
 # ---------------- parameters (mm) ----------------
@@ -728,8 +732,6 @@ def _tech_detail(out_path):
     S2 = 22.0
     det_x0 = STACK_XS[0] - STACK_LEN / 2 - 4.0
     det_x1 = STACK_XS[0] + STACK_LEN / 2 + 4.0
-    det_z0 = -STACK_H - 2.0
-    det_z1 = PLATE_Z + STACK_H + 2.0
 
     # this plate's body: bottom face carries the recessed groove, top face
     # carries the raised rib -- both are the same solid, shown together so
