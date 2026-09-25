@@ -14,7 +14,7 @@
 |---|---|
 | `major` | Bumped only on explicit command; zeroes minor and iterative |
 | `minor` | Bumped only on explicit command; zeroes iterative |
-| `iterative` | Incremented automatically on every change to the model |
+| `iterative` | Incremented automatically on every change to the model geometry or to how the model is generated (parameters, CLI options, generation logic), even if the default output is unaffected |
 
 **This file records major and minor releases only,** newest first. Iterative
 changes are not given entries here; they are folded into the next minor release
