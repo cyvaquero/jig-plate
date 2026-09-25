@@ -22,6 +22,11 @@ Changelog
          "Jig Plate"); logo mark not parameterized -- a shift in how the
          plate is generated, so iterative bumps now also cover generation
          logic/parameters, not just default-output geometry
+  1.0.2  debossed label font pinned to "DejaVu Sans" (matplotlib's bundled
+         font) instead of the generic "sans-serif" family alias, so the
+         debossed text is identical on macOS, Windows, and Linux instead
+         of depending on the host's installed fonts; default output
+         unchanged on this machine
 """
 import argparse
 from pathlib import Path
@@ -35,7 +40,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.patches import FancyBboxPatch
 
-VERSION = "1.0.1"
+VERSION = "1.0.2"
 OUT_DIR = Path(__file__).resolve().parent / "output"
 
 _parser = argparse.ArgumentParser(
@@ -169,8 +174,10 @@ def _text_polys(text, size, x0, y0):
     """Shapely polygons for extrudable text at (x0, y0) baseline."""
     from matplotlib.textpath import TextPath as _TP
     from matplotlib.font_manager import FontProperties as _FP
+    # pinned to the font matplotlib bundles internally (not a system font),
+    # so the debossed text is identical on macOS, Windows, and Linux
     tp = _TP((x0, y0), text, size=size,
-             prop=_FP(family="sans-serif", weight="bold"))
+             prop=_FP(family="DejaVu Sans", weight="bold"))
     raw = tp.to_polygons()
     polys = []
     for v in raw:
