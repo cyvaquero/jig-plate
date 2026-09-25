@@ -4,7 +4,7 @@
 |---|---|
 | **Generator** | `jig-plate.py` |
 | **Meshes** | `jig_plate_<version>.stl` |
-| **Latest release** | 0.1.0 |
+| **Latest release** | 1.0.0 |
 
 ## Versioning
 
@@ -27,6 +27,45 @@ each mesh (readable with `head -c 80 file.stl`).
 
 ---
 
+## 1.0.0 — First stable release
+
+Major release. Script and documentation reviewed end to end; no geometry
+changes.
+
+### Changed
+
+- Removed dead code (`det_z0`/`det_z1`, computed but never used) from the
+  stacking-joint detail drawing in `_tech_detail`. Documentation only — the
+  technical drawings are unaffected.
+- Corrected two documentation inconsistencies found during review:
+  - The plate's corner-stacking-rib height was mislabeled 10 mm in
+    `README.md` and the 0.1.0 changelog entry below; the correct figure
+    (`PLATE_Z + STACK_H` = 9 + 1.5) is 10.5 mm.
+  - The 0.1.0 changelog entry's "Files" section named a version-suffixed
+    script filename (`jig-plate_0.1.0.py`) that doesn't match the actual,
+    unversioned script filename (`jig-plate.py`).
+
+### Result
+
+Unchanged from 0.1.0: 481.5 cm³, bounding box 246 × 218 × 10.5 mm. Verified
+identical (volume, bounding box, face count) before and after the dead-code
+cleanup.
+
+### Validation
+
+Not yet printed under this name.
+
+### Files
+
+- `jig-plate.py`
+
+### Generated Files
+
+- `jig_plate_1.0.0.stl`
+- `jig_plate_1.0.0_stack_coupon.stl`
+
+---
+
 ## 0.1.0 — Baseline
 
 First versioned release. Establishes the base plate: no blank-specific
@@ -35,7 +74,7 @@ top of without modification.
 
 ### Plate
 
-- Footprint: 246 × 218 × 9 mm (10 mm at the corner stacking ribs)
+- Footprint: 246 × 218 × 9 mm (10.5 mm at the corner stacking ribs)
 - No pocket cavities, lips, vented floor, finger divots, or pocket-level
   registration marks — this is deliberately a blank plate
 
@@ -76,7 +115,7 @@ Not yet printed under this name.
 
 ### Files
 
-- `jig-plate_0.1.0.py`
+- `jig-plate.py`
 
 ### Generated Files
 
