@@ -18,6 +18,10 @@ Changelog
          geometry changes; dead code removed from the stacking-joint
          detail drawing; documentation figure/filename inconsistencies
          corrected
+  1.0.1  debossed text label parameterized via --label (default unchanged,
+         "Jig Plate"); logo mark not parameterized -- a shift in how the
+         plate is generated, so iterative bumps now also cover generation
+         logic/parameters, not just default-output geometry
 """
 import argparse
 from pathlib import Path
@@ -31,7 +35,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.patches import FancyBboxPatch
 
-VERSION = "1.0.0"
+VERSION = "1.0.1"
 OUT_DIR = Path(__file__).resolve().parent / "output"
 
 _parser = argparse.ArgumentParser(
