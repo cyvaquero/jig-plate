@@ -8,6 +8,9 @@ blank-agnostic: the magnet bores and the corner stacking rib/groove system.
 Pockets for a specific blank are added on top of this base in a separate
 script.
 
+The debossed text label is parameterized via --label (default "Jig Plate");
+the logo mark next to it is not. See LABEL below.
+
 Changelog
   0.1.0  base design -- magnet bores and corner stacking rib/groove system,
          debossed "Jig Plate" wordmark, no pocket geometry
@@ -16,6 +19,7 @@ Changelog
          detail drawing; documentation figure/filename inconsistencies
          corrected
 """
+import argparse
 from pathlib import Path
 
 import numpy as np
@@ -29,6 +33,17 @@ from matplotlib.patches import FancyBboxPatch
 
 VERSION = "1.0.0"
 OUT_DIR = Path(__file__).resolve().parent / "output"
+
+_parser = argparse.ArgumentParser(
+    description="Generate the jig plate base STL, diagram, and technical "
+                 "drawings."
+)
+_parser.add_argument(
+    "--label", default="Jig Plate",
+    help='Text debossed on the top and left faces, next to the logo mark '
+         '(the logo itself is not parameterized). Default: "Jig Plate".',
+)
+_args = _parser.parse_args()
 
 # ---------------- parameters (mm) ----------------
 PLATE_X, PLATE_Y, PLATE_Z = 246.0, 218.0, 9.0
@@ -126,7 +141,7 @@ for mx in STACK_XS:
 
 # ---- debossed branding on top face (front frame edge) ----
 DEBOSS_D = 0.3
-LABEL = "Jig Plate"
+LABEL = _args.label
 _front_cy = FRONT_MARGIN / 2
 
 
