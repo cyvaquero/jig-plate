@@ -21,7 +21,8 @@ import dataclasses
 import numpy as np
 import trimesh
 from trimesh.creation import box, extrude_polygon
-from shapely.geometry import Polygon, MultiPolygon
+from shapely.geometry import Polygon, MultiPolygon, box as shapely_box
+from shapely.ops import unary_union
 
 
 @dataclasses.dataclass(frozen=True)
@@ -49,6 +50,12 @@ class PlateGeometry:
     stack_ys: tuple
     label: str
     deboss_d: float
+    honeycomb_enabled: bool
+    honeycomb_skin: float
+    honeycomb_wall: float
+    honeycomb_af: float
+    honeycomb_margin_x: float
+    honeycomb_margin_y: float
 
 
 @dataclasses.dataclass(frozen=True)
@@ -173,6 +180,88 @@ def _add_deboss_right(poly_list, target, plate_x, plate_y, deboss_d):
             target.append(m)
 
 
+def _hex_field_polys(x0, x1, y0, y1, af, wall):
+    """Full-coverage pointy-top hex lattice (cell holes only -- the rib is
+    the gap left between adjacent holes by the pitch, same construction as
+    eu-business-card-jig's vented pocket floor), covering at least the
+    [x0, x1] x [y0, y1] rectangle so it can be clipped to it afterward."""
+    Rh = af / np.sqrt(3.0)  # hole circumradius
+    Rc = (af + wall) / np.sqrt(3.0)  # cell (hole + rib) circumradius
+    col_p = af + wall
+    row_p = 1.5 * Rc
+    base = [
+        (Rh * np.cos(np.radians(90 + 60 * k)), Rh * np.sin(np.radians(90 + 60 * k)))
+        for k in range(6)
+    ]
+
+    polys = []
+    r = 0
+    cy = y0 - Rh
+    while cy <= y1 + Rh + 1e-9:
+        cx = x0 - af / 2 + (col_p / 2 if r % 2 else 0.0)
+        while cx <= x1 + af / 2 + 1e-9:
+            polys.append(Polygon([(cx + vx, cy + vy) for vx, vy in base]))
+            cx += col_p
+        cy += row_p
+        r += 1
+    return polys
+
+
+def _honeycomb_cuts(
+    plate_x, plate_y, plate_z,
+    honeycomb_skin, honeycomb_wall, honeycomb_af,
+    honeycomb_margin_x, honeycomb_margin_y,
+    bottom_mag_inset_x, bottom_mag_ys, mag_d,
+    stack_xs, stack_ys, stack_w, stack_len,
+):
+    """Bottom-face honeycomb lightening cutout: a hex grid of blind pockets
+    cut up from z=0, leaving a thin skin at the top and a honeycomb wall
+    between pockets.
+
+    Built as a full lattice then clipped to the margin-inset field with a
+    boolean intersection, so boundary cells are cut short rather than
+    dropped whole -- same approach eu-business-card-jig uses for its
+    vented pocket floor. The clipped field is then subtracted from the
+    bottom-corner mount-bore and corner-stack-rib/groove footprints (with
+    clearance) so a cell reaching into either gets clipped there too,
+    instead of relying on the margins alone to keep clear. Any sliver left
+    over from either clip that's too small to print cleanly is dropped.
+    """
+    cuts = []
+    x0, x1 = honeycomb_margin_x, plate_x - honeycomb_margin_x
+    y0, y1 = honeycomb_margin_y, plate_y - honeycomb_margin_y
+    if x1 <= x0 or y1 <= y0:
+        return cuts
+
+    pocket_top_z = plate_z - honeycomb_skin  # cut from the bottom up to here
+
+    field = unary_union(_hex_field_polys(x0, x1, y0, y1, honeycomb_af, honeycomb_wall))
+    field = field.intersection(shapely_box(x0, y0, x1, y1))
+
+    excl = []
+    mag_r = mag_d / 2 + 2.0
+    for mx in (bottom_mag_inset_x, plate_x - bottom_mag_inset_x):
+        for my in bottom_mag_ys:
+            excl.append(shapely_box(mx - mag_r, my - mag_r, mx + mag_r, my + mag_r))
+    stack_clear = 2.0
+    for sx in stack_xs:
+        for sy in stack_ys:
+            excl.append(shapely_box(
+                sx - stack_len / 2 - stack_clear, sy - stack_w / 2 - stack_clear,
+                sx + stack_len / 2 + stack_clear, sy + stack_w / 2 + stack_clear,
+            ))
+    if excl:
+        field = field.difference(unary_union(excl))
+
+    min_sliver_area = 3.0  # drop fragments too small to print cleanly
+    geoms = list(field.geoms) if hasattr(field, "geoms") else [field]
+    for g in geoms:
+        if not isinstance(g, Polygon) or g.is_empty or g.area < min_sliver_area:
+            continue
+        cuts.append(extrude_polygon(g, height=pocket_top_z))
+    return cuts
+
+
 def build_plate(
     *,
     plate_x=246.0, plate_y=218.0, plate_z=9.0,
@@ -182,6 +271,8 @@ def build_plate(
     stack_w=1.5, stack_len=6.0, stack_h=1.5, stack_play=0.2,
     stack_inset_x=4.0, stack_inset_y=4.0,
     label="Jig Plate", deboss_d=0.3,
+    honeycomb_enabled=True, honeycomb_skin=2.4, honeycomb_wall=2.6,
+    honeycomb_af=23.1, honeycomb_margin_x=16.0, honeycomb_margin_y=22.0,
 ):
     """Build the jig plate base solid.
 
@@ -193,6 +284,19 @@ def build_plate(
 
     `build_plate()` with no arguments reproduces the current default plate
     exactly -- see CHANGELOG.md for what the defaults are and why.
+
+    A honeycomb lightening cutout is cut up from the bottom face by
+    default (`honeycomb_enabled=True`): a thin `honeycomb_skin`-thick top
+    skin left uncut, with a hex grid of pockets (`honeycomb_af` mm across
+    flats, same sizing convention as eu-business-card-jig's vented pocket
+    floor) separated by `honeycomb_wall`-wide walls, inset
+    `honeycomb_margin_x`/`honeycomb_margin_y` from the plate edges. Unlike
+    a drop-if-it-doesn't-fit grid, the lattice is clipped to the margin
+    field and to the bottom-corner mounting magnet bores/corner stacking
+    rib-groove footprints (with clearance) via boolean intersection and
+    difference, so boundary cells are cut short rather than omitted -- see
+    `_honeycomb_cuts`. Pass `honeycomb_enabled=False` for a solid
+    underside.
 
     Returns a `PlateResult` (`.solid`: trimesh.Trimesh, `.geometry`:
     PlateGeometry). Pure -- no file I/O, no argv, no printing.
@@ -292,6 +396,15 @@ def build_plate(
         scribes, plate_x, plate_y, deboss_d,
     )
 
+    if honeycomb_enabled:
+        cuts.extend(_honeycomb_cuts(
+            plate_x, plate_y, plate_z,
+            honeycomb_skin, honeycomb_wall, honeycomb_af,
+            honeycomb_margin_x, honeycomb_margin_y,
+            bottom_mag_inset_x, bottom_mag_ys, mag_d,
+            stack_xs, stack_ys, stack_w, stack_len,
+        ))
+
     plate = bx(0, 0, 0, plate_x, plate_y, plate_z)
     solid = trimesh.boolean.difference([plate] + cuts, engine="manifold")
     solid = trimesh.boolean.union([solid] + marks, engine="manifold")
@@ -307,5 +420,8 @@ def build_plate(
         stack_inset_y=stack_inset_y,
         stack_xs=stack_xs, stack_ys=stack_ys,
         label=label, deboss_d=deboss_d,
+        honeycomb_enabled=honeycomb_enabled, honeycomb_skin=honeycomb_skin,
+        honeycomb_wall=honeycomb_wall, honeycomb_af=honeycomb_af,
+        honeycomb_margin_x=honeycomb_margin_x, honeycomb_margin_y=honeycomb_margin_y,
     )
     return PlateResult(solid=solid, geometry=geometry)
