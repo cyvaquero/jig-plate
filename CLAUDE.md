@@ -57,10 +57,12 @@ Setup from scratch: `python3 -m venv .venv && .venv/bin/pip install -r requireme
 filenames and the 80-byte STL header (`head -c 80 file.stl`). Keep `version` in
 `pyproject.toml` in sync.
 
-- **iterative**: bump automatically on every change to the model geometry
-  *or to how the model is generated* — parameters, CLI options, or
-  generation logic that change what the script can produce, even when the
-  default output is unaffected
+- **iterative**: bump automatically on any change to the generated model —
+  a change to the plate's default output (geometry, dimensions, positions)
+  *or* a change to how the model is generated (parameters, CLI options,
+  generation logic), even when the default output itself is unaffected.
+  A default-output change is the clearer, more common case; do not treat
+  the generation-logic clause as the only one that matters.
 - **minor / major**: bump only when explicitly told to; zero the fields below it
 
 Every iterative change gets a one-line entry in the `Changelog` block of the

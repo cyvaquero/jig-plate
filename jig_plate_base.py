@@ -44,8 +44,9 @@ class PlateGeometry:
     stack_h: float
     stack_play: float
     stack_inset_x: float
+    stack_inset_y: float
     stack_xs: tuple
-    stack_ys: list
+    stack_ys: tuple
     label: str
     deboss_d: float
 
@@ -145,9 +146,9 @@ def build_plate(
     plate_x=246.0, plate_y=218.0, plate_z=9.0,
     front_margin=10.0, back_margin=10.0,
     mag_d=6.1, mag_depth=3.2, mag_count_x=4, mag_inset_x=30.75,
-    bottom_mag_inset_x=20.0,
+    bottom_mag_inset_x=12.0,
     stack_w=1.5, stack_len=6.0, stack_h=1.5, stack_play=0.2,
-    stack_inset_x=6.0,
+    stack_inset_x=4.0, stack_inset_y=4.0,
     label="Jig Plate", deboss_d=0.3,
 ):
     """Build the jig plate base solid.
@@ -158,8 +159,8 @@ def build_plate(
     on top of; see `PlateGeometry` on the result for where those reserved
     zones are so pockets can avoid them.
 
-    All defaults match the original single-script generator (v1.1.0), so
-    `build_plate()` with no arguments reproduces that plate exactly.
+    `build_plate()` with no arguments reproduces the current default plate
+    exactly -- see CHANGELOG.md for what the defaults are and why.
 
     Returns a `PlateResult` (`.solid`: trimesh.Trimesh, `.geometry`:
     PlateGeometry). Pure -- no file I/O, no argv, no printing.
@@ -170,7 +171,7 @@ def build_plate(
     ]
     bottom_mag_ys = [front_margin / 2, plate_y - back_margin / 2]
     stack_xs = (stack_inset_x, plate_x - stack_inset_x)
-    stack_ys = bottom_mag_ys
+    stack_ys = (stack_inset_y, plate_y - stack_inset_y)
 
     cuts, marks, scribes = [], [], []
 
@@ -189,7 +190,11 @@ def build_plate(
             )
             cuts.append(c)
 
-    # bottom-face corner mounting magnet bores
+    # bottom-face corner mounting magnet bores. Inset kept close to the
+    # corner stacking rib/groove (1.95 mm wall between them in X, the same
+    # clearance value already used elsewhere in this design) rather than
+    # the plate edge, since the rib/groove -- not the edge -- is the
+    # nearest feature at the default stack_inset_x/_y.
     for mx in (bottom_mag_inset_x, plate_x - bottom_mag_inset_x):
         for my in bottom_mag_ys:
             c = trimesh.creation.cylinder(
@@ -201,7 +206,10 @@ def build_plate(
     # corner stacking ribs (top face) and grooves (bottom face): a plate's
     # own top rib seats in the next plate's bottom groove, at the same
     # fixed corner position on every plate regardless of pocket layout.
-    # Four corners, same Y bands as the bottom magnets.
+    # Four corners, inset stack_inset_x/stack_inset_y from each corner --
+    # independent of the bottom mounting magnets' Y position, though both
+    # stay clear of each other (verified: disjoint footprints at the
+    # defaults).
     for mx in stack_xs:
         for my in stack_ys:
             marks.append(
@@ -212,8 +220,10 @@ def build_plate(
             )
             scribes.append(
                 bx(
-                    mx - stack_len / 2, my - (stack_w + stack_play) / 2, -0.1,
-                    mx + stack_len / 2, my + (stack_w + stack_play) / 2,
+                    mx - (stack_len + stack_play) / 2,
+                    my - (stack_w + stack_play) / 2, -0.1,
+                    mx + (stack_len + stack_play) / 2,
+                    my + (stack_w + stack_play) / 2,
                     stack_h + 0.1,
                 )
             )
@@ -255,6 +265,7 @@ def build_plate(
         bottom_mag_inset_x=bottom_mag_inset_x, bottom_mag_ys=bottom_mag_ys,
         stack_w=stack_w, stack_len=stack_len, stack_h=stack_h,
         stack_play=stack_play, stack_inset_x=stack_inset_x,
+        stack_inset_y=stack_inset_y,
         stack_xs=stack_xs, stack_ys=stack_ys,
         label=label, deboss_d=deboss_d,
     )

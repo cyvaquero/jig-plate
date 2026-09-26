@@ -49,6 +49,33 @@ Changelog
          already has). Verified no collision with the stacking rib/groove
          (disjoint in X) and still watertight; volume/bbox unchanged.
   2.1.0  minor release folding 2.0.1
+  2.1.1  corner stacking rib/groove reinset: stack_inset_x 6 -> 4 mm, and
+         a new stack_inset_y (4 mm) decouples the rib/groove Y position
+         from bottom_mag_ys, which it previously reused -- now a fixed
+         4 mm inset from the corner on both axes, independent of the
+         mounting-magnet border bands. Verified no collision with any
+         magnet bore (all disjoint footprints) and still watertight;
+         volume/bbox unchanged. Edge clearance in X drops 3 -> 1 mm.
+  2.1.2  default bottom_mag_inset_x 20 -> 12 mm, bringing the bottom-face
+         corner mounting magnets in toward the corner stacking rib/groove
+         (the nearer feature -- their Y-bands already overlap, only X
+         separated them). Gives a 1.95 mm wall between magnet bore and
+         stacking rib/groove, the same clearance value already used
+         elsewhere in this design. Verified no collision against any
+         magnet bore or stack zone and still watertight; volume/bbox
+         unchanged. The stack coupon already fully captures both features
+         at this inset -- relabeled to reflect it now also validates this
+         wall.
+  2.1.3  stack_play now also opens up the groove's length (X), not just
+         its width (Y) -- the rib/groove fit previously had zero
+         clearance lengthwise while already having 0.2 mm of width play,
+         an inconsistency rather than a deliberate tight fit. Groove is
+         now 6.2 mm long (rib stays 6.0 mm). Magnet-to-groove wall drops
+         1.95 -> 1.85 mm, groove edge clearance 1.0 -> 0.9 mm; both still
+         comfortably positive. Verified still watertight; volume/bbox
+         unchanged at display precision.
+  2.2.0  minor release folding 2.1.1-2.1.3. Corner stacking coupon
+         printed and physically test-stacked: fit confirmed good.
 """
 import argparse
 from pathlib import Path
@@ -62,7 +89,7 @@ from matplotlib.patches import FancyBboxPatch
 
 from jig_plate_base import build_plate, bx
 
-VERSION = "2.1.0"
+VERSION = "2.2.0"
 OUT_DIR = Path(__file__).resolve().parent / "output"
 
 
@@ -621,7 +648,12 @@ def main():
 
     # test coupon: front-right corner, carrying the stacking rib/groove and
     # its bottom mounting magnet -- for validating the corner stacking fit
-    # independently of any pocket layout added later. Print two to mate.
+    # AND the wall between the magnet bore and the stacking rib/groove
+    # (1.95 mm at the defaults), independently of any pocket layout added
+    # later. Print two to mate. The cut region (46 x 20 mm) is sized to
+    # fully contain both features at the default stack_inset_x/_y and
+    # bottom_mag_inset_x -- if either moves much closer to this corner,
+    # re-check that both stay fully inside SC_X0/SC_Y1 below.
     STACK_COUPON = OUT_DIR / f"jig_plate_{VERSION}_stack_coupon.stl"
     SC_X0, SC_Y0, SC_Y1 = geom.plate_x - 46.0, 0.0, 20.0
     stack_coupon = trimesh.boolean.intersection(
@@ -634,7 +666,7 @@ def main():
         STACK_COUPON,
         f"Jig plate {VERSION} | "
         f"stack coupon {geom.plate_x - SC_X0:g}x{SC_Y1 - SC_Y0:g}"
-        f"x{geom.plate_z:.0f}mm | corner",
+        f"x{geom.plate_z:.0f}mm | corner, magnet+rib wall test",
     )
     print(
         "stack coupon:",
