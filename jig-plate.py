@@ -1,4 +1,4 @@
-"""Jig plate -- parametric generator for the stackable laser-jig base plate.
+"""Jig plate -- CLI generator for the stackable laser-jig base plate.
 
 VERSION below is the single source of truth: it drives the output
 filenames and the 80-byte binary STL header of both meshes.
@@ -8,8 +8,14 @@ blank-agnostic: the magnet bores and the corner stacking rib/groove system.
 Pockets for a specific blank are added on top of this base in a separate
 script.
 
+The reusable geometry lives in jig_plate_base.py (a hyphenated filename
+like this one can't itself be `import`ed). Other generator scripts should
+`from jig_plate_base import build_plate` directly rather than running this
+CLI; this script is the command-line entry point: argument parsing, STL
+export, and the diagrams/technical drawings.
+
 The debossed text label is parameterized via --label (default "Jig Plate");
-the logo mark next to it is not. See LABEL below.
+the logo mark next to it is not. See build_plate()'s `label` parameter.
 
 Changelog
   0.1.0  base design -- magnet bores and corner stacking rib/groove system,
@@ -27,247 +33,30 @@ Changelog
          debossed text is identical on macOS, Windows, and Linux instead
          of depending on the host's installed fonts; default output
          unchanged on this machine
+  1.1.0  minor release folding 1.0.1-1.0.2
+  1.1.1  plate geometry extracted into the importable jig_plate_base.py
+         library (build_plate()); this script is now a thin CLI wrapper
+         around it -- a shift in how the plate is generated, default
+         output unchanged
+  2.0.0  major release: two-file architecture becomes the project's public
+         structure -- jig_plate_base.build_plate() is the supported API for
+         other generator scripts to build on this base plate, jig-plate.py
+         is CLI-only. Default output unchanged.
 """
 import argparse
 from pathlib import Path
 
 import numpy as np
 import trimesh
-from trimesh.creation import box, extrude_polygon
-from shapely.geometry import Polygon, MultiPolygon
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.patches import FancyBboxPatch
 
-VERSION = "1.1.0"
+from jig_plate_base import build_plate, bx
+
+VERSION = "2.0.0"
 OUT_DIR = Path(__file__).resolve().parent / "output"
-
-_parser = argparse.ArgumentParser(
-    description="Generate the jig plate base STL, diagram, and technical "
-                 "drawings."
-)
-_parser.add_argument(
-    "--label", default="Jig Plate",
-    help='Text debossed on the top and left faces, next to the logo mark '
-         '(the logo itself is not parameterized). Default: "Jig Plate".',
-)
-_args = _parser.parse_args()
-
-# ---------------- parameters (mm) ----------------
-PLATE_X, PLATE_Y, PLATE_Z = 246.0, 218.0, 9.0
-
-# border bands along the front (-Y) and back (+Y) edges: house the bottom
-# mounting magnets and the corner stacking rib/groove, independent of
-# whatever pocket layout gets added on top of this base later
-FRONT_MARGIN, BACK_MARGIN = 10.0, 17.0
-
-MAG_D = 6.1  # bore for a 6 mm magnet, push fit
-MAG_DEPTH = 3.2  # blind depth for a 3 mm magnet
-
-# push-fit magnet bores in the front (-Y) and back (+Y) faces: evenly spaced
-# and symmetric about the X centreline, positioned off PLATE_X only, so
-# stacked jigs mate face to face regardless of pocket layout
-MAG_COUNT_X = 4
-MAG_INSET_X = 30.75  # first/last bore center inset from the left/right edges
-MAG_XS = [
-    MAG_INSET_X + i * (PLATE_X - 2 * MAG_INSET_X) / (MAG_COUNT_X - 1)
-    for i in range(MAG_COUNT_X)
-]
-
-# push-fit magnet bores in the four corners of the bottom (-Z) face, for
-# mounting the plate itself (e.g. to a magnetic base). Same 6.1 mm bore /
-# 3.2 mm depth as the front/back mating magnets, blind from the bottom
-# upward. Centered in the front/back border bands, well inset from the
-# side edges so the corner stacking rib/groove has clear room next to it.
-BOTTOM_MAG_INSET_X = 20.0
-BOTTOM_MAG_YS = [FRONT_MARGIN / 2, PLATE_Y - BACK_MARGIN / 2]
-
-# corner stacking ribs/grooves: blank-agnostic registration between two
-# plates. Positioned off PLATE_X/PLATE_Y only, so any two plates sharing
-# the same outer footprint stack together regardless of what pocket layout
-# each one holds.
-STACK_W = 1.5  # rib/groove width (Y)
-STACK_LEN = 6.0  # rib/groove length (X)
-STACK_H = 1.5  # raised height on top face -- prouder than the old pocket
-# datum lines were, so the stacking fit carries the alignment load
-STACK_PLAY = 0.2  # extra width cut into the receiving groove
-STACK_INSET_X = 6.0  # rib/groove center inset from the left/right edges
-STACK_XS = (STACK_INSET_X, PLATE_X - STACK_INSET_X)
-STACK_YS = BOTTOM_MAG_YS
-
-OUT_DIR.mkdir(exist_ok=True)
-OUT = OUT_DIR / f"jig_plate_{VERSION}.stl"
-
-
-def bx(x0, y0, z0, x1, y1, z1):
-    m = box(extents=(x1 - x0, y1 - y0, z1 - z0))
-    m.apply_translation(((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2))
-    return m
-
-
-cuts, marks, scribes = [], [], []
-
-# push-fit magnet bores in the front (-Y) and back (+Y) faces, same X
-# positions on both so stacked plates mate face to face
-for mx in MAG_XS:
-    for y_face, sign in ((0.0, 1.0), (PLATE_Y, -1.0)):
-        c = trimesh.creation.cylinder(
-            radius=MAG_D / 2, height=MAG_DEPTH + 2, sections=64
-        )
-        c.apply_transform(trimesh.transformations.rotation_matrix(np.pi / 2, [1, 0, 0]))
-        c.apply_translation((mx, y_face + sign * (MAG_DEPTH / 2 - 1.0), PLATE_Z / 2))
-        cuts.append(c)
-
-# bottom-face corner mounting magnet bores
-for mx in (BOTTOM_MAG_INSET_X, PLATE_X - BOTTOM_MAG_INSET_X):
-    for my in BOTTOM_MAG_YS:
-        c = trimesh.creation.cylinder(
-            radius=MAG_D / 2, height=MAG_DEPTH + 2, sections=64
-        )
-        c.apply_translation((mx, my, MAG_DEPTH / 2 - 1.0))
-        cuts.append(c)
-
-# corner stacking ribs (top face) and grooves (bottom face): a plate's own
-# top rib seats in the next plate's bottom groove, at the same fixed corner
-# position on every plate regardless of pocket layout -- see STACK_*
-# comments above. Four corners, same Y bands as the bottom magnets.
-for mx in STACK_XS:
-    for my in STACK_YS:
-        marks.append(
-            bx(
-                mx - STACK_LEN / 2, my - STACK_W / 2, PLATE_Z - 0.2,
-                mx + STACK_LEN / 2, my + STACK_W / 2, PLATE_Z + STACK_H,
-            )
-        )
-        scribes.append(
-            bx(
-                mx - STACK_LEN / 2, my - (STACK_W + STACK_PLAY) / 2, -0.1,
-                mx + STACK_LEN / 2, my + (STACK_W + STACK_PLAY) / 2,
-                STACK_H + 0.1,
-            )
-        )
-
-# ---- debossed branding on top face (front frame edge) ----
-DEBOSS_D = 0.3
-LABEL = _args.label
-_front_cy = FRONT_MARGIN / 2
-
-
-def _logo_polys(cx, cy):
-    """Logo: semicircle dome (+Y) with three rows of tapered bar pairs."""
-    r = 2.5
-    angles = np.linspace(0, np.pi, 64)
-    semi = [(cx + r * np.cos(a), cy + r * np.sin(a)) for a in angles]
-    parts = [Polygon(semi)]
-    gap, bh, sp = 0.4, 0.65, 0.4
-    y0 = cy - 0.5
-    for i, w in enumerate([3.0, 2.5, 2.0]):
-        yt = y0 - i * (bh + sp)
-        yb = yt - bh
-        parts.append(Polygon([(cx-w, yt), (cx-gap, yt), (cx-gap, yb), (cx-w, yb)]))
-        parts.append(Polygon([(cx+gap, yt), (cx+w, yt), (cx+w, yb), (cx+gap, yb)]))
-    return parts
-
-
-def _text_polys(text, size, x0, y0):
-    """Shapely polygons for extrudable text at (x0, y0) baseline."""
-    from matplotlib.textpath import TextPath as _TP
-    from matplotlib.font_manager import FontProperties as _FP
-    # pinned to the font matplotlib bundles internally (not a system font),
-    # so the debossed text is identical on macOS, Windows, and Linux
-    tp = _TP((x0, y0), text, size=size,
-             prop=_FP(family="DejaVu Sans", weight="bold"))
-    raw = tp.to_polygons()
-    polys = []
-    for v in raw:
-        p = Polygon(v)
-        if not p.is_valid:
-            p = p.buffer(0)
-        if not p.is_empty and abs(p.area) > 0.01:
-            polys.append(p)
-    polys.sort(key=lambda p: abs(p.area), reverse=True)
-    out = []
-    for p in polys:
-        hit = False
-        for i, o in enumerate(out):
-            if o.contains(p.representative_point()):
-                out[i] = o.difference(p)
-                hit = True
-                break
-        if not hit:
-            out.append(p)
-    return out
-
-
-def _add_deboss(poly_list, target):
-    """Extrude polys as cut volumes and append to target list."""
-    for p in poly_list:
-        geoms = list(p.geoms) if isinstance(p, MultiPolygon) else [p]
-        for g in geoms:
-            if g.is_empty or abs(g.area) < 0.01:
-                continue
-            m = extrude_polygon(g, height=DEBOSS_D + 0.2)
-            m.apply_translation((0, 0, PLATE_Z - DEBOSS_D))
-            target.append(m)
-
-
-_tp0 = _text_polys(LABEL, 4.0, 0, 0)
-_tb = [p.bounds for p in _tp0]
-_tw = max(b[2] for b in _tb) - min(b[0] for b in _tb)
-_tx0 = min(b[0] for b in _tb)
-_lw = 6.0
-_total = _lw + 3.0 + _tw
-_sx = (PLATE_X - _total) / 2
-
-_add_deboss(_logo_polys(_sx + _lw / 2, _front_cy + 0.4), scribes)
-_add_deboss(_text_polys(LABEL, 4.0,
-                        _sx + _lw + 3.0 - _tx0, _front_cy - 2.0), scribes)
-
-
-def _add_deboss_left(poly_list, target):
-    """Deboss on the left face (x=0), readable from outside (-X)."""
-    for p in poly_list:
-        geoms = list(p.geoms) if isinstance(p, MultiPolygon) else [p]
-        for g in geoms:
-            if g.is_empty or abs(g.area) < 0.01:
-                continue
-            m = extrude_polygon(g, height=DEBOSS_D + 0.2)
-            verts = m.vertices.copy()
-            new_v = np.empty_like(verts)
-            new_v[:, 0] = verts[:, 2] - 0.2
-            new_v[:, 1] = PLATE_Y - verts[:, 0]
-            new_v[:, 2] = verts[:, 1]
-            m.vertices = new_v
-            m.invert()
-            target.append(m)
-
-
-_sx_left = (PLATE_Y - _total) / 2
-
-_add_deboss_left(_logo_polys(_sx_left + _lw / 2, PLATE_Z / 2 + 0.4), scribes)
-_add_deboss_left(_text_polys(LABEL, 4.0,
-                             _sx_left + _lw + 3.0 - _tx0,
-                             PLATE_Z / 2 - 2.0), scribes)
-
-plate = bx(0, 0, 0, PLATE_X, PLATE_Y, PLATE_Z)
-solid = trimesh.boolean.difference([plate] + cuts, engine="manifold")
-solid = trimesh.boolean.union([solid] + marks, engine="manifold")
-solid = trimesh.boolean.difference([solid] + scribes, engine="manifold")
-
-print(
-    "watertight:",
-    solid.is_watertight,
-    "| volume cm3:",
-    round(solid.volume / 1000, 1),
-    "| bbox:",
-    np.round(solid.bounds[1] - solid.bounds[0], 3),
-    "| faces:",
-    len(solid.faces),
-)
-
-solid.export(OUT)
-print("wrote", OUT)
 
 
 # stamp the 80-byte binary STL header so the version travels with the file
@@ -277,40 +66,7 @@ def stamp(path, text):
     open(path, "wb").write(b)
 
 
-stamp(
-    OUT,
-    f"Jig plate {VERSION} | "
-    f"{PLATE_X:.0f}x{PLATE_Y:.0f}x{PLATE_Z:.0f}mm | base plate, no pockets",
-)
-
-# test coupon: front-right corner, carrying the stacking rib/groove and its
-# bottom mounting magnet -- for validating the corner stacking fit
-# independently of any pocket layout added later. Print two to test mating.
-STACK_COUPON = OUT_DIR / f"jig_plate_{VERSION}_stack_coupon.stl"
-SC_X0, SC_Y0, SC_Y1 = PLATE_X - 46.0, 0.0, 20.0
-stack_coupon = trimesh.boolean.intersection(
-    [solid, bx(SC_X0, SC_Y0, -1, PLATE_X, SC_Y1, PLATE_Z + STACK_H + 1)],
-    engine="manifold",
-)
-stack_coupon.export(STACK_COUPON)
-print("wrote", STACK_COUPON)
-stamp(
-    STACK_COUPON,
-    f"Jig plate {VERSION} | "
-    f"stack coupon {PLATE_X - SC_X0:g}x{SC_Y1 - SC_Y0:g}x{PLATE_Z:.0f}mm | corner",
-)
-print(
-    "stack coupon:",
-    stack_coupon.is_watertight,
-    round(stack_coupon.volume / 1000, 2),
-    "cm3",
-    np.round(stack_coupon.bounds[1] - stack_coupon.bounds[0], 2),
-)
-
-# -------- labelled diagram --------
-IMG_DIR = Path(__file__).resolve().parent / "images"
-IMG_DIR.mkdir(exist_ok=True)
-
+# -------- diagram / technical drawing styling --------
 TEAL = "#1D9E75"
 AMBER = "#BA7517"
 VIOLET = "#7F77DD"
@@ -361,7 +117,7 @@ def add_key(ax, items, y_pos):
 
 
 # ---- plate diagram (isometric) ----
-def _plate_diagram(out_path):
+def _plate_diagram(out_path, geom):
     from matplotlib.patches import Polygon as MplPoly, Circle as MplCircle
     S = 1.8
     fig, ax = plt.subplots(figsize=(12, 8.5), dpi=200)
@@ -370,7 +126,7 @@ def _plate_diagram(out_path):
     fig.patch.set_facecolor(BG)
     ax.set_facecolor(BG)
 
-    px, py, pz = PLATE_X * S, PLATE_Y * S, PLATE_Z * S * 3
+    px, py, pz = geom.plate_x * S, geom.plate_y * S, geom.plate_z * S * 3
 
     ax.add_patch(MplPoly(iso_rect(0, 0, px, py, pz),
                  fc=SHAPE, alpha=0.16, ec=FG, lw=0.5, zorder=2))
@@ -380,16 +136,17 @@ def _plate_diagram(out_path):
                  fc=SHAPE, alpha=0.30, ec=FG, lw=0.5, zorder=2))
 
     # magnet positions on the front edge, for reference
-    for mx in MAG_XS:
+    for mx in geom.mag_xs:
         mag_pt = iso(mx * S, 0, pz * 0.5)
         ax.add_patch(MplCircle(mag_pt, 3.5, fc=VIOLET, alpha=0.6,
                      ec=FG, lw=0.4, zorder=4))
 
     # corner stacking rib footprint, top-left-front corner, for reference
-    sx0, sy0 = STACK_XS[0] * S, STACK_YS[0] * S
-    ax.add_patch(MplPoly(iso_rect(sx0 - STACK_LEN * S / 2, sy0 - STACK_W * S / 2,
-                                   sx0 + STACK_LEN * S / 2, sy0 + STACK_W * S / 2, pz),
-                 fc=AMBER, alpha=0.7, ec=FG, lw=0.4, zorder=4))
+    sx0, sy0 = geom.stack_xs[0] * S, geom.stack_ys[0] * S
+    ax.add_patch(MplPoly(
+        iso_rect(sx0 - geom.stack_len * S / 2, sy0 - geom.stack_w * S / 2,
+                 sx0 + geom.stack_len * S / 2, sy0 + geom.stack_w * S / 2, pz),
+        fc=AMBER, alpha=0.7, ec=FG, lw=0.4, zorder=4))
 
     top_ctr = iso(px / 2, py / 2, pz)
     ax.text(top_ctr[0], top_ctr[1], "Top face",
@@ -416,7 +173,7 @@ def _plate_diagram(out_path):
     leader(ax, bottom_pt, (bottom_pt[0] + 70, bottom_pt[1] - 30),
            "Bottom — sits on the bed, carries mounting magnets")
 
-    mag_pt = iso(MAG_XS[1] * S, 0, pz * 0.5)
+    mag_pt = iso(geom.mag_xs[1] * S, 0, pz * 0.5)
     leader(ax, mag_pt, (mag_pt[0] - 30, mag_pt[1] - 55),
            "Magnet bore", ha="right")
 
@@ -434,9 +191,6 @@ def _plate_diagram(out_path):
                 facecolor=BG)
     plt.close(fig)
     print("wrote", out_path)
-
-
-_plate_diagram(IMG_DIR / f"jig_plate_{VERSION}_diagram.png")
 
 
 # -------- technical drawings --------
@@ -547,8 +301,7 @@ def _title_block(ax, title, scale_label):
 
 
 # ---- technical drawing 1: dimensioned top plan view ----
-def _tech_top_plan(out_path):
-    from matplotlib.patches import Polygon as MplPoly
+def _tech_top_plan(out_path, geom):
     S = 2.0
     fig, ax = plt.subplots(figsize=(14, 10), dpi=200)
     ax.set_aspect("equal")
@@ -557,23 +310,23 @@ def _tech_top_plan(out_path):
     ax.set_facecolor(BG)
 
     # plate outline
-    ax.add_patch(plt.Rectangle((0, 0), PLATE_X * S, PLATE_Y * S,
+    ax.add_patch(plt.Rectangle((0, 0), geom.plate_x * S, geom.plate_y * S,
                  fc="none", ec=FG, lw=CUT_LW, zorder=3))
 
     # magnet bores (front and back faces)
-    for mx in MAG_XS:
-        for y_face in [0, PLATE_Y]:
-            ax.plot(mx * S, y_face * S, "o", color=VIOLET, ms=MAG_D * S / 2,
-                    mfc="none", mew=1.0, zorder=5)
+    for mx in geom.mag_xs:
+        for y_face in [0, geom.plate_y]:
+            ax.plot(mx * S, y_face * S, "o", color=VIOLET,
+                    ms=geom.mag_d * S / 2, mfc="none", mew=1.0, zorder=5)
             ax.plot(mx * S, y_face * S, "+", color=VIOLET, ms=3, mew=0.6,
                     zorder=5)
 
     # bottom-face mounting magnets: hidden from this view (underside), so
     # drawn dashed per the hidden-line convention rather than the solid
     # circles used for the front/back through-faces above
-    for mx in (BOTTOM_MAG_INSET_X, PLATE_X - BOTTOM_MAG_INSET_X):
-        for my in BOTTOM_MAG_YS:
-            ax.add_patch(plt.Circle((mx * S, my * S), MAG_D * S / 2,
+    for mx in (geom.bottom_mag_inset_x, geom.plate_x - geom.bottom_mag_inset_x):
+        for my in geom.bottom_mag_ys:
+            ax.add_patch(plt.Circle((mx * S, my * S), geom.mag_d * S / 2,
                          fc="none", ec=VIOLET, lw=HIDDEN_LW, ls=HIDDEN_LS,
                          zorder=5))
             ax.plot(mx * S, my * S, "+", color=VIOLET, ms=3, mew=0.6,
@@ -581,39 +334,41 @@ def _tech_top_plan(out_path):
 
     # corner stacking ribs (top face, visible) / grooves (bottom, hidden
     # underneath at the same footprint plus play)
-    for mx in STACK_XS:
-        for my in STACK_YS:
+    for mx in geom.stack_xs:
+        for my in geom.stack_ys:
             ax.add_patch(plt.Rectangle(
-                (mx * S - STACK_LEN * S / 2, my * S - STACK_W * S / 2),
-                STACK_LEN * S, STACK_W * S,
+                (mx * S - geom.stack_len * S / 2, my * S - geom.stack_w * S / 2),
+                geom.stack_len * S, geom.stack_w * S,
                 fc=AMBER, alpha=0.6, ec=FG, lw=0.6, zorder=5))
 
     # overall dimensions
-    _dim_h(ax, PLATE_Y * S, 0, PLATE_X * S,
-           f"{PLATE_X:.0f}", offset=12 * S)
-    _dim_v(ax, PLATE_X * S, 0, PLATE_Y * S,
-           f"{PLATE_Y:.0f}", offset=12 * S)
+    _dim_h(ax, geom.plate_y * S, 0, geom.plate_x * S,
+           f"{geom.plate_x:.0f}", offset=12 * S)
+    _dim_v(ax, geom.plate_x * S, 0, geom.plate_y * S,
+           f"{geom.plate_y:.0f}", offset=12 * S)
 
     # front border band (houses the bottom mounting magnet + branding)
-    _dim_v(ax, 0, 0, FRONT_MARGIN * S,
-           f"{FRONT_MARGIN:.0f}", offset=-15 * S, side="left")
+    _dim_v(ax, 0, 0, geom.front_margin * S,
+           f"{geom.front_margin:.0f}", offset=-15 * S, side="left")
 
     # magnet X positions
-    ax.annotate("", xy=(MAG_XS[0] * S, -6 * S), xytext=(MAG_XS[1] * S, -6 * S),
+    ax.annotate("", xy=(geom.mag_xs[0] * S, -6 * S),
+                xytext=(geom.mag_xs[1] * S, -6 * S),
                 arrowprops=dict(arrowstyle="<->", color=VIOLET, lw=DIM_LW,
                                 shrinkA=0, shrinkB=0))
-    ax.plot([MAG_XS[0] * S, MAG_XS[0] * S], [0, -6 * S],
+    ax.plot([geom.mag_xs[0] * S, geom.mag_xs[0] * S], [0, -6 * S],
             color=VIOLET, lw=EXT_LW, alpha=0.5)
-    ax.plot([MAG_XS[1] * S, MAG_XS[1] * S], [0, -6 * S],
+    ax.plot([geom.mag_xs[1] * S, geom.mag_xs[1] * S], [0, -6 * S],
             color=VIOLET, lw=EXT_LW, alpha=0.5)
-    ax.text((MAG_XS[0] + MAG_XS[1]) / 2 * S, -7.5 * S,
-            f"{MAG_XS[1] - MAG_XS[0]:.1f} typ.",
+    ax.text((geom.mag_xs[0] + geom.mag_xs[1]) / 2 * S, -7.5 * S,
+            f"{geom.mag_xs[1] - geom.mag_xs[0]:.1f} typ.",
             fontsize=6.5, ha="center", va="top", color=VIOLET,
             fontfamily="sans-serif")
 
     # stacking rib inset from the left edge
-    _dim_h(ax, STACK_YS[0] * S - STACK_W * S, 0, STACK_XS[0] * S,
-           f"{STACK_INSET_X:.0f}", offset=-8 * S, side="below", fontsize=6.5)
+    _dim_h(ax, geom.stack_ys[0] * S - geom.stack_w * S, 0, geom.stack_xs[0] * S,
+           f"{geom.stack_inset_x:.0f}", offset=-8 * S, side="below",
+           fontsize=6.5)
 
     _title_block(ax, "Top Plan View", f"Scale {S}:1 (screen)")
 
@@ -626,7 +381,7 @@ def _tech_top_plan(out_path):
 
 
 # ---- technical drawing 2: front elevation (Y=0 face) ----
-def _tech_front_elevation(out_path):
+def _tech_front_elevation(out_path, geom):
     S = 10.0
     fig, ax = plt.subplots(figsize=(16, 3.5), dpi=200)
     ax.set_aspect("equal")
@@ -635,29 +390,29 @@ def _tech_front_elevation(out_path):
     ax.set_facecolor(BG)
 
     # plate outline (front face: X vs Z, true scale)
-    ax.add_patch(plt.Rectangle((0, 0), PLATE_X * S, PLATE_Z * S,
+    ax.add_patch(plt.Rectangle((0, 0), geom.plate_x * S, geom.plate_z * S,
                  fc=SHAPE, alpha=0.08, ec=FG, lw=CUT_LW, zorder=3))
 
     # magnet bores (front face, true circles)
-    for mx in MAG_XS:
+    for mx in geom.mag_xs:
         bore_cx = mx * S
-        bore_cy = (PLATE_Z / 2) * S
-        bore_r = (MAG_D / 2) * S
+        bore_cy = (geom.plate_z / 2) * S
+        bore_r = (geom.mag_d / 2) * S
         ax.add_patch(plt.Circle((bore_cx, bore_cy), bore_r,
                      fc=VIOLET, alpha=0.15, ec=VIOLET, lw=0.8, zorder=4))
         ax.plot(bore_cx, bore_cy, "+", color=VIOLET, ms=4, mew=0.5, zorder=5)
 
     # overall X dimension (above)
-    _dim_h(ax, PLATE_Z * S, 0, PLATE_X * S,
-           f"{PLATE_X:.0f}", offset=6 * S)
+    _dim_h(ax, geom.plate_z * S, 0, geom.plate_x * S,
+           f"{geom.plate_x:.0f}", offset=6 * S)
 
     # overall Z dimension (right)
-    _dim_v(ax, PLATE_X * S, 0, PLATE_Z * S,
-           f"{PLATE_Z:.0f}", offset=8 * S)
+    _dim_v(ax, geom.plate_x * S, 0, geom.plate_z * S,
+           f"{geom.plate_z:.0f}", offset=8 * S)
 
     # magnet bore center height (left of first bore)
-    _dim_v(ax, MAG_XS[0] * S, 0, (PLATE_Z / 2) * S,
-           f"{PLATE_Z / 2:.1f}", offset=-6 * S, side="left", fontsize=6)
+    _dim_v(ax, geom.mag_xs[0] * S, 0, (geom.plate_z / 2) * S,
+           f"{geom.plate_z / 2:.1f}", offset=-6 * S, side="left", fontsize=6)
 
     _title_block(ax, "Front Elevation", f"Scale {S}:1 (screen)")
 
@@ -670,7 +425,7 @@ def _tech_front_elevation(out_path):
 
 
 # ---- technical drawing 3: magnet-bore and stacking-joint detail ----
-def _tech_detail(out_path):
+def _tech_detail(out_path, geom):
     from matplotlib.patches import Polygon as MplPoly
     import matplotlib.gridspec as gridspec
 
@@ -686,26 +441,26 @@ def _tech_detail(out_path):
 
     S1 = 45.0
     plate_y0_m = -2.0
-    plate_y1_m = MAG_DEPTH + 8.0
-    bore_r = MAG_D / 2
-    mag_cz = PLATE_Z / 2
+    plate_y1_m = geom.mag_depth + 8.0
+    bore_r = geom.mag_d / 2
+    mag_cz = geom.plate_z / 2
 
     plate_verts = [
         (plate_y0_m, 0), (plate_y1_m, 0),
-        (plate_y1_m, PLATE_Z), (plate_y0_m, PLATE_Z),
+        (plate_y1_m, geom.plate_z), (plate_y0_m, geom.plate_z),
     ]
     ax1.add_patch(MplPoly([(y * S1, z * S1) for y, z in plate_verts],
                   fc=SHAPE, alpha=0.10, ec=FG, lw=CUT_LW, zorder=2))
     _hatch_rect(ax1, plate_y0_m * S1, 0, plate_y1_m * S1,
                 (mag_cz - bore_r) * S1, spacing=4.5)
     _hatch_rect(ax1, plate_y0_m * S1, (mag_cz + bore_r) * S1,
-                plate_y1_m * S1, PLATE_Z * S1, spacing=4.5)
-    _hatch_rect(ax1, MAG_DEPTH * S1, (mag_cz - bore_r) * S1,
+                plate_y1_m * S1, geom.plate_z * S1, spacing=4.5)
+    _hatch_rect(ax1, geom.mag_depth * S1, (mag_cz - bore_r) * S1,
                 plate_y1_m * S1, (mag_cz + bore_r) * S1, spacing=4.5)
 
     bore_verts = [
-        (0, mag_cz - bore_r), (MAG_DEPTH, mag_cz - bore_r),
-        (MAG_DEPTH, mag_cz + bore_r), (0, mag_cz + bore_r),
+        (0, mag_cz - bore_r), (geom.mag_depth, mag_cz - bore_r),
+        (geom.mag_depth, mag_cz + bore_r), (0, mag_cz + bore_r),
     ]
     ax1.add_patch(MplPoly([(y * S1, z * S1) for y, z in bore_verts],
                   fc=BG, ec=FG, lw=CUT_LW, zorder=3))
@@ -723,24 +478,24 @@ def _tech_detail(out_path):
              fontsize=6.5, ha="center", va="center", color=VIOLET,
              fontfamily="sans-serif", fontstyle="italic", zorder=5)
 
-    ax1.plot([0, 0], [-1 * S1, (PLATE_Z + 1) * S1],
+    ax1.plot([0, 0], [-1 * S1, (geom.plate_z + 1) * S1],
              color=FG, lw=CUT_LW, zorder=3)
     ax1.plot([plate_y0_m * S1, plate_y1_m * S1],
              [mag_cz * S1, mag_cz * S1],
              color=DIM_COLOR, lw=0.4, ls=(0, (8, 4)), zorder=2)
 
-    _dim_v(ax1, MAG_DEPTH / 2 * S1, (mag_cz - bore_r) * S1,
+    _dim_v(ax1, geom.mag_depth / 2 * S1, (mag_cz - bore_r) * S1,
            (mag_cz + bore_r) * S1,
-           f"⌀{MAG_D:.1f}", offset=5 * S1, fontsize=7)
-    _dim_h(ax1, (mag_cz + bore_r) * S1, 0, MAG_DEPTH * S1,
-           f"{MAG_DEPTH:.1f} deep", offset=3 * S1, fontsize=7)
+           f"⌀{geom.mag_d:.1f}", offset=5 * S1, fontsize=7)
+    _dim_h(ax1, (mag_cz + bore_r) * S1, 0, geom.mag_depth * S1,
+           f"{geom.mag_depth:.1f} deep", offset=3 * S1, fontsize=7)
     _dim_v(ax1, plate_y1_m * S1, 0, mag_cz * S1,
            f"{mag_cz:.1f}", offset=4 * S1, fontsize=6.5)
-    _dim_v(ax1, plate_y1_m * S1, 0, PLATE_Z * S1,
-           f"{PLATE_Z:.0f}", offset=9 * S1, fontsize=7)
-    clearance = MAG_DEPTH - mag_depth
+    _dim_v(ax1, plate_y1_m * S1, 0, geom.plate_z * S1,
+           f"{geom.plate_z:.0f}", offset=9 * S1, fontsize=7)
+    clearance = geom.mag_depth - mag_depth
     if clearance > 0.05:
-        _dim_h(ax1, (mag_cz - bore_r) * S1, mag_depth * S1, MAG_DEPTH * S1,
+        _dim_h(ax1, (mag_cz - bore_r) * S1, mag_depth * S1, geom.mag_depth * S1,
                f"{clearance:.1f}", offset=-3 * S1, side="below",
                fontsize=5.5)
 
@@ -756,51 +511,54 @@ def _tech_detail(out_path):
     ax2.set_facecolor(BG)
 
     S2 = 22.0
-    det_x0 = STACK_XS[0] - STACK_LEN / 2 - 4.0
-    det_x1 = STACK_XS[0] + STACK_LEN / 2 + 4.0
+    det_x0 = geom.stack_xs[0] - geom.stack_len / 2 - 4.0
+    det_x1 = geom.stack_xs[0] + geom.stack_len / 2 + 4.0
 
     # this plate's body: bottom face carries the recessed groove, top face
     # carries the raised rib -- both are the same solid, shown together so
     # the joint is legible without drawing a second mating plate
     body_verts = [
-        (det_x0, 0), (det_x1, 0), (det_x1, PLATE_Z), (det_x0, PLATE_Z),
+        (det_x0, 0), (det_x1, 0), (det_x1, geom.plate_z), (det_x0, geom.plate_z),
     ]
     ax2.add_patch(MplPoly([(x * S2, z * S2) for x, z in body_verts],
                   fc=SHAPE, alpha=0.10, ec=FG, lw=CUT_LW, zorder=2))
-    _hatch_rect(ax2, det_x0 * S2, 0, det_x1 * S2, PLATE_Z * S2, spacing=4.0)
+    _hatch_rect(ax2, det_x0 * S2, 0, det_x1 * S2, geom.plate_z * S2,
+                spacing=4.0)
 
-    rib_x0 = STACK_XS[0] - STACK_LEN / 2
-    rib_x1 = STACK_XS[0] + STACK_LEN / 2
+    rib_x0 = geom.stack_xs[0] - geom.stack_len / 2
+    rib_x1 = geom.stack_xs[0] + geom.stack_len / 2
     rib_verts = [
-        (rib_x0, PLATE_Z), (rib_x1, PLATE_Z),
-        (rib_x1, PLATE_Z + STACK_H), (rib_x0, PLATE_Z + STACK_H),
+        (rib_x0, geom.plate_z), (rib_x1, geom.plate_z),
+        (rib_x1, geom.plate_z + geom.stack_h), (rib_x0, geom.plate_z + geom.stack_h),
     ]
     ax2.add_patch(MplPoly([(x * S2, z * S2) for x, z in rib_verts],
                   fc=AMBER, alpha=0.55, ec=FG, lw=CUT_LW, zorder=4))
 
-    play = STACK_PLAY / 2
+    play = geom.stack_play / 2
     groove_verts = [
         (rib_x0 - play, 0), (rib_x1 + play, 0),
-        (rib_x1 + play, STACK_H), (rib_x0 - play, STACK_H),
+        (rib_x1 + play, geom.stack_h), (rib_x0 - play, geom.stack_h),
     ]
     ax2.add_patch(MplPoly([(x * S2, z * S2) for x, z in groove_verts],
                   fc=BG, ec=FG, lw=CUT_LW, zorder=4))
 
-    ax2.text(STACK_XS[0] * S2, (PLATE_Z + STACK_H + 0.8) * S2,
+    ax2.text(geom.stack_xs[0] * S2, (geom.plate_z + geom.stack_h + 0.8) * S2,
              "rib (top face)", fontsize=6.5, ha="center", va="bottom",
              color=AMBER, fontfamily="sans-serif", fontstyle="italic",
              zorder=5)
-    ax2.text(STACK_XS[0] * S2, (STACK_H / 2) * S2,
+    ax2.text(geom.stack_xs[0] * S2, (geom.stack_h / 2) * S2,
              "groove\n(bottom face)", fontsize=6, ha="center", va="center",
              color=MUTED, fontfamily="sans-serif", fontstyle="italic",
              zorder=5)
 
-    _dim_v(ax2, rib_x1 * S2, PLATE_Z * S2, (PLATE_Z + STACK_H) * S2,
-           f"{STACK_H:.1f}", offset=4 * S2, fontsize=7)
-    _dim_h(ax2, PLATE_Z * S2, rib_x0 * S2, rib_x1 * S2,
-           f"{STACK_LEN:.1f}", offset=-2.5 * S2, side="below", fontsize=6.5)
-    _dim_v(ax2, (rib_x0 - play) * S2, 0, STACK_H * S2,
-           f"{STACK_H:.1f} deep", offset=-4 * S2, side="left", fontsize=6.5)
+    _dim_v(ax2, rib_x1 * S2, geom.plate_z * S2, (geom.plate_z + geom.stack_h) * S2,
+           f"{geom.stack_h:.1f}", offset=4 * S2, fontsize=7)
+    _dim_h(ax2, geom.plate_z * S2, rib_x0 * S2, rib_x1 * S2,
+           f"{geom.stack_len:.1f}", offset=-2.5 * S2, side="below",
+           fontsize=6.5)
+    _dim_v(ax2, (rib_x0 - play) * S2, 0, geom.stack_h * S2,
+           f"{geom.stack_h:.1f} deep", offset=-4 * S2, side="left",
+           fontsize=6.5)
 
     ax2.text(0.5, -0.02,
              f"Stacking Joint Detail  |  Scale {S2:.0f}:1",
@@ -815,6 +573,77 @@ def _tech_detail(out_path):
     print("wrote", out_path)
 
 
-_tech_top_plan(IMG_DIR / f"jig_plate_{VERSION}_tech_top.png")
-_tech_front_elevation(IMG_DIR / f"jig_plate_{VERSION}_tech_front.png")
-_tech_detail(IMG_DIR / f"jig_plate_{VERSION}_tech_detail.png")
+def main():
+    parser = argparse.ArgumentParser(
+        description="Generate the jig plate base STL, diagram, and "
+                     "technical drawings."
+    )
+    parser.add_argument(
+        "--label", default="Jig Plate",
+        help='Text debossed on the top and left faces, next to the logo '
+             'mark (the logo itself is not parameterized). '
+             'Default: "Jig Plate".',
+    )
+    args = parser.parse_args()
+
+    result = build_plate(label=args.label)
+    solid = result.solid
+    geom = result.geometry
+
+    print(
+        "watertight:",
+        solid.is_watertight,
+        "| volume cm3:",
+        round(solid.volume / 1000, 1),
+        "| bbox:",
+        np.round(solid.bounds[1] - solid.bounds[0], 3),
+        "| faces:",
+        len(solid.faces),
+    )
+
+    OUT_DIR.mkdir(exist_ok=True)
+    OUT = OUT_DIR / f"jig_plate_{VERSION}.stl"
+    solid.export(OUT)
+    print("wrote", OUT)
+    stamp(
+        OUT,
+        f"Jig plate {VERSION} | "
+        f"{geom.plate_x:.0f}x{geom.plate_y:.0f}x{geom.plate_z:.0f}mm | "
+        f"base plate, no pockets",
+    )
+
+    # test coupon: front-right corner, carrying the stacking rib/groove and
+    # its bottom mounting magnet -- for validating the corner stacking fit
+    # independently of any pocket layout added later. Print two to mate.
+    STACK_COUPON = OUT_DIR / f"jig_plate_{VERSION}_stack_coupon.stl"
+    SC_X0, SC_Y0, SC_Y1 = geom.plate_x - 46.0, 0.0, 20.0
+    stack_coupon = trimesh.boolean.intersection(
+        [solid, bx(SC_X0, SC_Y0, -1, geom.plate_x, SC_Y1, geom.plate_z + geom.stack_h + 1)],
+        engine="manifold",
+    )
+    stack_coupon.export(STACK_COUPON)
+    print("wrote", STACK_COUPON)
+    stamp(
+        STACK_COUPON,
+        f"Jig plate {VERSION} | "
+        f"stack coupon {geom.plate_x - SC_X0:g}x{SC_Y1 - SC_Y0:g}"
+        f"x{geom.plate_z:.0f}mm | corner",
+    )
+    print(
+        "stack coupon:",
+        stack_coupon.is_watertight,
+        round(stack_coupon.volume / 1000, 2),
+        "cm3",
+        np.round(stack_coupon.bounds[1] - stack_coupon.bounds[0], 2),
+    )
+
+    IMG_DIR = Path(__file__).resolve().parent / "images"
+    IMG_DIR.mkdir(exist_ok=True)
+    _plate_diagram(IMG_DIR / f"jig_plate_{VERSION}_diagram.png", geom)
+    _tech_top_plan(IMG_DIR / f"jig_plate_{VERSION}_tech_top.png", geom)
+    _tech_front_elevation(IMG_DIR / f"jig_plate_{VERSION}_tech_front.png", geom)
+    _tech_detail(IMG_DIR / f"jig_plate_{VERSION}_tech_detail.png", geom)
+
+
+if __name__ == "__main__":
+    main()
