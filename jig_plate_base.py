@@ -141,6 +141,38 @@ def _add_deboss_left(poly_list, target, plate_y, deboss_d):
             target.append(m)
 
 
+def _add_deboss_right(poly_list, target, plate_x, plate_y, deboss_d):
+    """Deboss on the right face (x=plate_x), readable from outside (+X).
+
+    Not simply _add_deboss_left with the depth flipped: a viewer at -X
+    facing +X (the left face's reader) has "right" = -Y, which is why
+    _add_deboss_left negates old_x into Y (plate_y - old_x) to keep
+    reading order correct. A viewer at +X facing -X (this face's reader)
+    has "right" = +Y instead -- the opposite sign -- so this maps old_x
+    into Y directly, unflipped. (Verified via forward x up for each
+    viewing direction, up = +Z.) That sign difference is exactly what
+    makes this a mirror rather than a plain duplicate: same content, same
+    position, opposite left/right order, each legible from its own side.
+    Depth still embeds inward from x=plate_x instead of x=0, and this
+    remains an orientation-reversing mapping (needs m.invert()), same as
+    the left face.
+    """
+    for p in poly_list:
+        geoms = list(p.geoms) if isinstance(p, MultiPolygon) else [p]
+        for g in geoms:
+            if g.is_empty or abs(g.area) < 0.01:
+                continue
+            m = extrude_polygon(g, height=deboss_d + 0.2)
+            verts = m.vertices.copy()
+            new_v = np.empty_like(verts)
+            new_v[:, 0] = plate_x - (verts[:, 2] - 0.2)
+            new_v[:, 1] = verts[:, 0]
+            new_v[:, 2] = verts[:, 1]
+            m.vertices = new_v
+            m.invert()
+            target.append(m)
+
+
 def build_plate(
     *,
     plate_x=246.0, plate_y=218.0, plate_z=9.0,
@@ -251,6 +283,13 @@ def build_plate(
     _add_deboss_left(
         _text_polys(label, 4.0, _sx_left + _lw + 3.0 - _tx0, plate_z / 2 - 2.0),
         scribes, plate_y, deboss_d,
+    )
+
+    _add_deboss_right(_logo_polys(_sx_left + _lw / 2, plate_z / 2 + 0.4),
+                       scribes, plate_x, plate_y, deboss_d)
+    _add_deboss_right(
+        _text_polys(label, 4.0, _sx_left + _lw + 3.0 - _tx0, plate_z / 2 - 2.0),
+        scribes, plate_x, plate_y, deboss_d,
     )
 
     plate = bx(0, 0, 0, plate_x, plate_y, plate_z)
