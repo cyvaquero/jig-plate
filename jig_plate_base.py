@@ -220,8 +220,10 @@ def build_plate(
             )
             scribes.append(
                 bx(
-                    mx - stack_len / 2, my - (stack_w + stack_play) / 2, -0.1,
-                    mx + stack_len / 2, my + (stack_w + stack_play) / 2,
+                    mx - (stack_len + stack_play) / 2,
+                    my - (stack_w + stack_play) / 2, -0.1,
+                    mx + (stack_len + stack_play) / 2,
+                    my + (stack_w + stack_play) / 2,
                     stack_h + 0.1,
                 )
             )

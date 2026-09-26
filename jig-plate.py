@@ -66,6 +66,14 @@ Changelog
          unchanged. The stack coupon already fully captures both features
          at this inset -- relabeled to reflect it now also validates this
          wall.
+  2.1.3  stack_play now also opens up the groove's length (X), not just
+         its width (Y) -- the rib/groove fit previously had zero
+         clearance lengthwise while already having 0.2 mm of width play,
+         an inconsistency rather than a deliberate tight fit. Groove is
+         now 6.2 mm long (rib stays 6.0 mm). Magnet-to-groove wall drops
+         1.95 -> 1.85 mm, groove edge clearance 1.0 -> 0.9 mm; both still
+         comfortably positive. Verified still watertight; volume/bbox
+         unchanged at display precision.
 """
 import argparse
 from pathlib import Path
@@ -79,7 +87,7 @@ from matplotlib.patches import FancyBboxPatch
 
 from jig_plate_base import build_plate, bx
 
-VERSION = "2.1.2"
+VERSION = "2.1.3"
 OUT_DIR = Path(__file__).resolve().parent / "output"
 
 
