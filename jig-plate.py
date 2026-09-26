@@ -49,6 +49,13 @@ Changelog
          already has). Verified no collision with the stacking rib/groove
          (disjoint in X) and still watertight; volume/bbox unchanged.
   2.1.0  minor release folding 2.0.1
+  2.1.1  corner stacking rib/groove reinset: stack_inset_x 6 -> 4 mm, and
+         a new stack_inset_y (4 mm) decouples the rib/groove Y position
+         from bottom_mag_ys, which it previously reused -- now a fixed
+         4 mm inset from the corner on both axes, independent of the
+         mounting-magnet border bands. Verified no collision with any
+         magnet bore (all disjoint footprints) and still watertight;
+         volume/bbox unchanged. Edge clearance in X drops 3 -> 1 mm.
 """
 import argparse
 from pathlib import Path
@@ -62,7 +69,7 @@ from matplotlib.patches import FancyBboxPatch
 
 from jig_plate_base import build_plate, bx
 
-VERSION = "2.1.0"
+VERSION = "2.1.1"
 OUT_DIR = Path(__file__).resolve().parent / "output"
 
 
