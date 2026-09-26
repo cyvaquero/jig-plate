@@ -6,14 +6,29 @@ is the base plate to which pockets are added for various types and sizes of
 blanks.
 
 Parametric generator for the **base plate only** — no blank-specific pockets,
-lips, or vents. One script, `jig-plate.py`, builds the plate and a
-corner test coupon (for the stacking rib/groove joint) as binary STL using
-trimesh with the manifold boolean engine, and renders diagrams and technical
-drawings with matplotlib.
+lips, or vents. `jig-plate.py` builds the plate and a corner test coupon
+(for the stacking rib/groove joint) as binary STL using trimesh with the
+manifold boolean engine, and renders diagrams and technical drawings with
+matplotlib.
 
 Only what is blank-agnostic lives here — magnet bores and the corner
 stacking rib/groove system — so any pocket layout for any blank can be
 built on top of this base without touching this geometry.
+
+## Two files, two roles
+
+- `jig_plate_base.py` — the importable library. `build_plate()` returns a
+  `PlateResult` (`.solid`: the trimesh solid, `.geometry`: a `PlateGeometry`
+  record of every magnet-bore and stacking-rib/groove position) with no
+  file I/O, no argv, no printing. A blank-specific generator script imports
+  this directly: `from jig_plate_base import build_plate`.
+- `jig-plate.py` — the CLI entry point (argument parsing, STL export,
+  diagrams). A hyphenated filename can't be `import`ed, which is exactly
+  why the reusable geometry doesn't live here.
+
+Keep this split: geometry and derived positions belong in
+`jig_plate_base.py`; anything CLI-only (argparse, file writing, matplotlib
+diagrams) belongs in `jig-plate.py`.
 
 ## Run
 
@@ -24,6 +39,15 @@ built on top of this base without touching this geometry.
 Writes STLs to `output/` and PNGs to `images/`, both gitignored. The script
 prints `watertight: True` for both meshes — if either is `False`, the
 geometry is broken and must not be released.
+
+To use the plate from another generator script instead of running the CLI:
+
+```python
+from jig_plate_base import build_plate
+result = build_plate()  # or build_plate(label="...", plate_x=..., ...)
+result.solid             # trimesh.Trimesh
+result.geometry.mag_xs   # reserved zones to lay pockets out around
+```
 
 Setup from scratch: `python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`
 
