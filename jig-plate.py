@@ -40,7 +40,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.patches import FancyBboxPatch
 
-VERSION = "1.0.2"
+VERSION = "1.1.0"
 OUT_DIR = Path(__file__).resolve().parent / "output"
 
 _parser = argparse.ArgumentParser(
