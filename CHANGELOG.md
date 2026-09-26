@@ -5,7 +5,7 @@
 | **Generator (CLI)** | `jig-plate.py` |
 | **Generator (library)** | `jig_plate_base.py` (`build_plate()`) |
 | **Meshes** | `jig_plate_<version>.stl` |
-| **Latest release** | 2.0.0 |
+| **Latest release** | 2.1.0 |
 
 ## Versioning
 
@@ -25,6 +25,48 @@ block in the generator docstring, which is updated on every model change.
 Each version's number appears in three places and they are kept in sync: the
 generator filename, the mesh filenames, and the 80-byte binary STL header of
 each mesh (readable with `head -c 80 file.stl`).
+
+---
+
+## 2.1.0 — Symmetric front/back border margins
+
+Minor release. Folds iterative change 2.0.1 into a versioned release.
+
+### Changed
+
+- **Default `back_margin` reduced from 17 mm to 10 mm**, matching
+  `front_margin`. The back-corner mounting magnet bore and stacking
+  rib/groove — previously 5.45 mm from the back edge while the
+  equivalent front-side features sat only 1.95 mm from the front edge —
+  now share the same 1.95 mm edge clearance on both sides.
+
+### Why
+
+The asymmetry had no design reason behind it: the front margin's 1.95 mm
+bore-to-edge clearance is already the validated value this design relies
+on, so matching the back margin to it removes an arbitrary difference
+rather than introducing a new, unvalidated one.
+
+### Result
+
+Unchanged from 2.0.0: 481.5 cm³, bounding box 246 × 218 × 10.5 mm.
+Verified no collision — the back-corner mounting magnet bore and stacking
+rib/groove stay separated in X (7.95 mm gap) regardless of sharing a Y
+position — and the plate is still watertight.
+
+### Validation
+
+Not yet printed under this name.
+
+### Files
+
+- `jig-plate.py`
+- `jig_plate_base.py`
+
+### Generated Files
+
+- `jig_plate_2.1.0.stl`
+- `jig_plate_2.1.0_stack_coupon.stl`
 
 ---
 
