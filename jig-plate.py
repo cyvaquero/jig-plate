@@ -74,6 +74,8 @@ Changelog
          1.95 -> 1.85 mm, groove edge clearance 1.0 -> 0.9 mm; both still
          comfortably positive. Verified still watertight; volume/bbox
          unchanged at display precision.
+  2.2.0  minor release folding 2.1.1-2.1.3. Corner stacking coupon
+         printed and physically test-stacked: fit confirmed good.
 """
 import argparse
 from pathlib import Path
@@ -87,7 +89,7 @@ from matplotlib.patches import FancyBboxPatch
 
 from jig_plate_base import build_plate, bx
 
-VERSION = "2.1.3"
+VERSION = "2.2.0"
 OUT_DIR = Path(__file__).resolve().parent / "output"
 
 
