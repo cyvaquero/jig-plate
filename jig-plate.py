@@ -85,6 +85,8 @@ Changelog
          see it: both read "Jig Plate" correctly, not mirrored/backwards).
          Verified still watertight; volume/bbox unchanged at display
          precision.
+  2.3.0  minor release folding 2.2.1. Branding now duplicated on both
+         side faces, each mirrored to read correctly from its own side.
 """
 import argparse
 from pathlib import Path
@@ -98,7 +100,7 @@ from matplotlib.patches import FancyBboxPatch
 
 from jig_plate_base import build_plate, bx
 
-VERSION = "2.2.1"
+VERSION = "2.3.0"
 OUT_DIR = Path(__file__).resolve().parent / "output"
 
 
