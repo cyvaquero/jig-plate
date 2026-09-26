@@ -48,6 +48,7 @@ Changelog
          edge clearance 5.45 -> 1.95 mm, same clearance the front bore
          already has). Verified no collision with the stacking rib/groove
          (disjoint in X) and still watertight; volume/bbox unchanged.
+  2.1.0  minor release folding 2.0.1
 """
 import argparse
 from pathlib import Path
@@ -61,7 +62,7 @@ from matplotlib.patches import FancyBboxPatch
 
 from jig_plate_base import build_plate, bx
 
-VERSION = "2.0.1"
+VERSION = "2.1.0"
 OUT_DIR = Path(__file__).resolve().parent / "output"
 
 
