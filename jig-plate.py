@@ -87,6 +87,19 @@ Changelog
          precision.
   2.3.0  minor release folding 2.2.1. Branding now duplicated on both
          side faces, each mirrored to read correctly from its own side.
+  2.3.1  bottom-face honeycomb lightening cutout added to build_plate()
+         (new honeycomb_enabled/honeycomb_skin/honeycomb_wall/
+         honeycomb_af/honeycomb_margin_x/honeycomb_margin_y params,
+         default honeycomb_enabled=True) -- a hex grid of blind pockets
+         cut up from the bottom face, sized to match eu-business-card-jig's
+         vented pocket floor (23.1 mm across flats, 2.6 mm walls), leaving
+         a 2.4 mm top skin. Boundary cells are clipped via boolean
+         intersection against the margin field and boolean difference
+         against the bottom-corner mounting bores and corner stacking
+         rib/groove footprints, rather than dropped whole. Default plate
+         volume drops 481.5 -> 282.0 cm3 (-41.4%); top face, all magnet
+         bores, and the stacking rib/groove/coupon are untouched. Verified
+         still watertight.
 """
 import argparse
 from pathlib import Path
@@ -100,7 +113,7 @@ from matplotlib.patches import FancyBboxPatch
 
 from jig_plate_base import build_plate, bx
 
-VERSION = "2.3.0"
+VERSION = "2.3.1"
 OUT_DIR = Path(__file__).resolve().parent / "output"
 
 
