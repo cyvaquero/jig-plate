@@ -25,8 +25,9 @@ below.
   corners, for mounting the plate itself
 - **Debossed branding** — logo mark plus a text label (default "Jig Plate",
   override with `--label`) recessed into the top face's front frame edge,
-  duplicated on the left face for readability when plates are stacked or
-  stored on edge
+  duplicated on the left and right faces (each mirrored to read correctly
+  from its own side) for readability when plates are stacked or stored on
+  edge
 - **Test coupon** — a corner piece carrying the stacking rib/groove and its
   mounting magnet, for validating the stacking fit *and* the wall between
   the magnet bore and the stacking rib/groove (1.95 mm at the defaults),
