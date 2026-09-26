@@ -5,7 +5,7 @@
 | **Generator (CLI)** | `jig-plate.py` |
 | **Generator (library)** | `jig_plate_base.py` (`build_plate()`) |
 | **Meshes** | `jig_plate_<version>.stl` |
-| **Latest release** | 2.2.0 |
+| **Latest release** | 2.3.0 |
 
 ## Versioning
 
@@ -25,6 +25,44 @@ block in the generator docstring, which is updated on every model change.
 Each version's number appears in three places and they are kept in sync: the
 generator filename, the mesh filenames, and the 80-byte binary STL header of
 each mesh (readable with `head -c 80 file.stl`).
+
+---
+
+## 2.3.0 — Branding duplicated on both side faces
+
+Minor release. Folds iterative change 2.2.1 into a versioned release.
+
+### Changed
+
+- **Debossed logo/label duplicated on the right face** (`x=plate_x`),
+  matching the existing left-face deboss. Each side face is mirrored to
+  read correctly from its own outward-facing direction — the right face
+  is not a plain copy of the left-face cut, since a viewer reading the
+  left face has "right" = −Y while a viewer reading the right face has
+  "right" = +Y, the opposite sign. Verified by rendering each face's cut
+  as its own viewer would see it: both read "Jig Plate" correctly, not
+  mirrored or backwards.
+
+### Result
+
+481.5 cm³, bounding box 246 × 218 × 10.5 mm — unchanged from 2.2.0 at
+display precision.
+
+### Validation
+
+Not yet printed under this name. The corner stacking joint this release
+depends on (2.2.0) was already printed and physically test-stacked with
+a confirmed good fit.
+
+### Files
+
+- `jig-plate.py`
+- `jig_plate_base.py`
+
+### Generated Files
+
+- `jig_plate_2.3.0.stl`
+- `jig_plate_2.3.0_stack_coupon.stl`
 
 ---
 
