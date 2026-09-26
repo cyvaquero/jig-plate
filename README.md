@@ -5,9 +5,12 @@ the magnet system and stacking joint shared by every jig built on it, with no
 pocket geometry of its own — pockets for a specific blank (business cards,
 tags, coasters, whatever) get added to this base in a separate script.
 
-One Python script, `jig-plate.py`, generates the base plate and a corner test
-coupon as watertight binary STL, plus a labelled diagram and dimensioned
-technical drawings.
+`jig-plate.py` generates the base plate and a corner test coupon as
+watertight binary STL, plus a labelled diagram and dimensioned technical
+drawings. The actual plate geometry lives in the importable
+`jig_plate_base.py` library, so another generator script can build on this
+base plate without running the CLI — see [Using it as a library](#using-it-as-a-library)
+below.
 
 ## Features
 
@@ -75,6 +78,31 @@ And into `images/`:
 
 The script prints watertight status, volume, bounding box, and face count for
 both meshes. Both must report `watertight: True` or the geometry is broken.
+
+## Using it as a library
+
+A hyphenated filename can't be `import`ed, so the reusable geometry lives
+in `jig_plate_base.py` instead. A blank-specific generator script builds
+pockets on top of this base by importing `build_plate` directly, with no
+CLI, no file I/O, and no argument parsing involved:
+
+```python
+from jig_plate_base import build_plate
+
+result = build_plate()                      # defaults match the CLI exactly
+result = build_plate(label="Card Jig")       # or override any parameter
+
+result.solid              # trimesh.Trimesh — the base plate, no pockets
+result.geometry.mag_xs    # front/back magnet-bore X positions
+result.geometry.stack_xs  # corner stacking rib/groove X positions
+result.geometry.stack_ys  # ...and Y positions — avoid these zones when
+                           # laying out pockets on top of the returned solid
+```
+
+`build_plate()` accepts every plate dimension and margin as a keyword
+argument (plate size, magnet spec/count/spacing, stacking rib/groove
+dimensions, the debossed label). See `jig_plate_base.py` for the full
+parameter list — all of it defaults to the same base plate this CLI ships.
 
 ## Printing notes
 

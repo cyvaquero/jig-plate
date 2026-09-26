@@ -2,9 +2,10 @@
 
 | | |
 |---|---|
-| **Generator** | `jig-plate.py` |
+| **Generator (CLI)** | `jig-plate.py` |
+| **Generator (library)** | `jig_plate_base.py` (`build_plate()`) |
 | **Meshes** | `jig_plate_<version>.stl` |
-| **Latest release** | 1.1.0 |
+| **Latest release** | 2.0.0 |
 
 ## Versioning
 
@@ -24,6 +25,60 @@ block in the generator docstring, which is updated on every model change.
 Each version's number appears in three places and they are kept in sync: the
 generator filename, the mesh filenames, and the 80-byte binary STL header of
 each mesh (readable with `head -c 80 file.stl`).
+
+---
+
+## 2.0.0 — Importable library, two-file architecture
+
+Major release. Folds iterative change 1.1.1 in. Breaking change to the
+project's structure (not to the plate itself): the generator is no longer
+one script.
+
+### Changed
+
+- **Split into two files.** `jig_plate_base.py` is a new, properly
+  importable library module (a hyphenated filename like `jig-plate.py`
+  can't itself be `import`ed) holding all plate geometry: `build_plate()`,
+  and the `PlateGeometry`/`PlateResult` dataclasses. `jig-plate.py` is now
+  a thin CLI wrapper around it — argument parsing, STL export, and the
+  diagrams/technical drawings only.
+- **Public API for other generator scripts.** A blank-specific pocket-layout
+  script now builds on this base plate by importing directly —
+  `from jig_plate_base import build_plate` — with no CLI, no file I/O, and
+  no argument parsing involved. `build_plate()` accepts every plate
+  dimension, margin, magnet spec, stacking-joint dimension, and the
+  debossed label as keyword arguments, and returns a `PlateResult` whose
+  `.geometry` exposes every magnet-bore and stacking-rib/groove position so
+  pockets can be laid out around them.
+
+### Why a major bump
+
+This changes what "the generator" means for this project: from one script
+to a documented two-file split with `jig_plate_base.build_plate()` as the
+supported integration point for other scripts. Nothing about the physical
+plate changes.
+
+### Result
+
+Unchanged from 1.1.0: 481.5 cm³, bounding box 246 × 218 × 10.5 mm. Verified
+`build_plate()` called with no arguments reproduces the exact default plate
+(identical volume, bounding box, face count) both directly and through the
+refactored CLI; `--label`, the stack coupon, and all three
+diagrams/technical drawings verified unchanged.
+
+### Validation
+
+Not yet printed under this name.
+
+### Files
+
+- `jig-plate.py`
+- `jig_plate_base.py`
+
+### Generated Files
+
+- `jig_plate_2.0.0.stl`
+- `jig_plate_2.0.0_stack_coupon.stl`
 
 ---
 
