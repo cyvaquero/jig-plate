@@ -20,9 +20,10 @@ technical drawings.
   back faces, symmetric about the centreline so plates mate either way round
 - **4 more magnet bores** (same Ø6.1 mm / 6 × 3 mm spec) in the bottom-face
   corners, for mounting the plate itself
-- **Debossed branding** — "Jig Plate" wordmark recessed into the top face's
-  front frame edge, duplicated on the left face for readability when plates
-  are stacked or stored on edge
+- **Debossed branding** — logo mark plus a text label (default "Jig Plate",
+  override with `--label`) recessed into the top face's front frame edge,
+  duplicated on the left face for readability when plates are stacked or
+  stored on edge
 - **Test coupon** — a corner piece carrying the stacking rib/groove and its
   mounting magnet, for validating the stacking fit independently of any
   pocket layout added later
@@ -49,6 +50,13 @@ python3 -m venv .venv
 
 ```bash
 .venv/bin/python jig-plate.py
+```
+
+Optionally override the debossed text label (the logo mark is always
+included and is not parameterized):
+
+```bash
+.venv/bin/python jig-plate.py --label "Card Jig"
 ```
 
 Generates into `output/`:

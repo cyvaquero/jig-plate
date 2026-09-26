@@ -34,6 +34,9 @@ filenames and the 80-byte STL header (`head -c 80 file.stl`). Keep `version` in
 `pyproject.toml` in sync.
 
 - **iterative**: bump automatically on every change to the model geometry
+  *or to how the model is generated* — parameters, CLI options, or
+  generation logic that change what the script can produce, even when the
+  default output is unaffected
 - **minor / major**: bump only when explicitly told to; zero the fields below it
 
 Every iterative change gets a one-line entry in the `Changelog` block of the
