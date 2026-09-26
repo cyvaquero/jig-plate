@@ -28,8 +28,9 @@ below.
   duplicated on the left face for readability when plates are stacked or
   stored on edge
 - **Test coupon** — a corner piece carrying the stacking rib/groove and its
-  mounting magnet, for validating the stacking fit independently of any
-  pocket layout added later
+  mounting magnet, for validating the stacking fit *and* the wall between
+  the magnet bore and the stacking rib/groove (1.95 mm at the defaults),
+  independently of any pocket layout added later
 
 ## Dimensions
 

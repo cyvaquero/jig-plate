@@ -146,7 +146,7 @@ def build_plate(
     plate_x=246.0, plate_y=218.0, plate_z=9.0,
     front_margin=10.0, back_margin=10.0,
     mag_d=6.1, mag_depth=3.2, mag_count_x=4, mag_inset_x=30.75,
-    bottom_mag_inset_x=20.0,
+    bottom_mag_inset_x=12.0,
     stack_w=1.5, stack_len=6.0, stack_h=1.5, stack_play=0.2,
     stack_inset_x=4.0, stack_inset_y=4.0,
     label="Jig Plate", deboss_d=0.3,
@@ -190,7 +190,11 @@ def build_plate(
             )
             cuts.append(c)
 
-    # bottom-face corner mounting magnet bores
+    # bottom-face corner mounting magnet bores. Inset kept close to the
+    # corner stacking rib/groove (1.95 mm wall between them in X, the same
+    # clearance value already used elsewhere in this design) rather than
+    # the plate edge, since the rib/groove -- not the edge -- is the
+    # nearest feature at the default stack_inset_x/_y.
     for mx in (bottom_mag_inset_x, plate_x - bottom_mag_inset_x):
         for my in bottom_mag_ys:
             c = trimesh.creation.cylinder(

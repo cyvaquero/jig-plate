@@ -56,6 +56,16 @@ Changelog
          mounting-magnet border bands. Verified no collision with any
          magnet bore (all disjoint footprints) and still watertight;
          volume/bbox unchanged. Edge clearance in X drops 3 -> 1 mm.
+  2.1.2  default bottom_mag_inset_x 20 -> 12 mm, bringing the bottom-face
+         corner mounting magnets in toward the corner stacking rib/groove
+         (the nearer feature -- their Y-bands already overlap, only X
+         separated them). Gives a 1.95 mm wall between magnet bore and
+         stacking rib/groove, the same clearance value already used
+         elsewhere in this design. Verified no collision against any
+         magnet bore or stack zone and still watertight; volume/bbox
+         unchanged. The stack coupon already fully captures both features
+         at this inset -- relabeled to reflect it now also validates this
+         wall.
 """
 import argparse
 from pathlib import Path
@@ -69,7 +79,7 @@ from matplotlib.patches import FancyBboxPatch
 
 from jig_plate_base import build_plate, bx
 
-VERSION = "2.1.1"
+VERSION = "2.1.2"
 OUT_DIR = Path(__file__).resolve().parent / "output"
 
 
@@ -628,7 +638,12 @@ def main():
 
     # test coupon: front-right corner, carrying the stacking rib/groove and
     # its bottom mounting magnet -- for validating the corner stacking fit
-    # independently of any pocket layout added later. Print two to mate.
+    # AND the wall between the magnet bore and the stacking rib/groove
+    # (1.95 mm at the defaults), independently of any pocket layout added
+    # later. Print two to mate. The cut region (46 x 20 mm) is sized to
+    # fully contain both features at the default stack_inset_x/_y and
+    # bottom_mag_inset_x -- if either moves much closer to this corner,
+    # re-check that both stay fully inside SC_X0/SC_Y1 below.
     STACK_COUPON = OUT_DIR / f"jig_plate_{VERSION}_stack_coupon.stl"
     SC_X0, SC_Y0, SC_Y1 = geom.plate_x - 46.0, 0.0, 20.0
     stack_coupon = trimesh.boolean.intersection(
@@ -641,7 +656,7 @@ def main():
         STACK_COUPON,
         f"Jig plate {VERSION} | "
         f"stack coupon {geom.plate_x - SC_X0:g}x{SC_Y1 - SC_Y0:g}"
-        f"x{geom.plate_z:.0f}mm | corner",
+        f"x{geom.plate_z:.0f}mm | corner, magnet+rib wall test",
     )
     print(
         "stack coupon:",
