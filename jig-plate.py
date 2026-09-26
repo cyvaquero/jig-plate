@@ -76,6 +76,17 @@ Changelog
          unchanged at display precision.
   2.2.0  minor release folding 2.1.1-2.1.3. Corner stacking coupon
          printed and physically test-stacked: fit confirmed good.
+  2.2.1  debossed logo/label duplicated on the right face (x=plate_x),
+         mirrored to read correctly from +X -- not a plain copy of the
+         left-face cut: a viewer at -X (left face) has "right" = -Y,
+         but a viewer at +X (right face) has "right" = +Y, so the
+         local-x-to-Y mapping is unflipped here versus the left face's
+         (verified by rendering each face's cut as its own viewer would
+         see it: both read "Jig Plate" correctly, not mirrored/backwards).
+         Verified still watertight; volume/bbox unchanged at display
+         precision.
+  2.3.0  minor release folding 2.2.1. Branding now duplicated on both
+         side faces, each mirrored to read correctly from its own side.
 """
 import argparse
 from pathlib import Path
@@ -89,7 +100,7 @@ from matplotlib.patches import FancyBboxPatch
 
 from jig_plate_base import build_plate, bx
 
-VERSION = "2.2.0"
+VERSION = "2.3.0"
 OUT_DIR = Path(__file__).resolve().parent / "output"
 
 
@@ -197,7 +208,7 @@ def _plate_diagram(out_path, geom):
 
     right_pt = iso(px, py * 0.55, pz * 0.35)
     leader(ax, right_pt, (right_pt[0] + 80, right_pt[1] + 10),
-           "Right edge", dashed=False)
+           "Right edge (branding)", dashed=False)
 
     back_pt = iso(px * 0.25, py, pz * 0.35)
     leader(ax, back_pt, (back_pt[0] - 60, back_pt[1] - 60),
