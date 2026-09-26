@@ -4,7 +4,7 @@
 |---|---|
 | **Generator** | `jig-plate.py` |
 | **Meshes** | `jig_plate_<version>.stl` |
-| **Latest release** | 1.0.0 |
+| **Latest release** | 1.1.0 |
 
 ## Versioning
 
@@ -24,6 +24,51 @@ block in the generator docstring, which is updated on every model change.
 Each version's number appears in three places and they are kept in sync: the
 generator filename, the mesh filenames, and the 80-byte binary STL header of
 each mesh (readable with `head -c 80 file.stl`).
+
+---
+
+## 1.1.0 — Configurable label, cross-platform font
+
+Minor release. Folds iterative changes 1.0.1–1.0.2 into a versioned release.
+
+### Added
+
+- **`--label` CLI flag** for the debossed text on the top and left faces,
+  default unchanged (`"Jig Plate"`). The logo mark next to it is not
+  parameterized.
+
+### Changed
+
+- **Debossed label font** pinned to `"DejaVu Sans"` (the font matplotlib
+  bundles internally) instead of the generic `"sans-serif"` family alias,
+  so the debossed text's exact letterforms no longer depend on which
+  fonts happen to be installed on the host — identical on macOS, Windows,
+  and Linux.
+- **Versioning policy** (`CLAUDE.md`, this file) broadened: iterative
+  bumps now also cover changes to how the model is generated (parameters,
+  CLI options, generation logic), not just changes to the default-output
+  geometry. Both changes above shipped under this broadened rule even
+  though the default output was unaffected.
+
+### Result
+
+Unchanged from 1.0.0: 481.5 cm³, bounding box 246 × 218 × 10.5 mm. Verified
+identical (volume, bounding box, face count) with the default label on this
+machine; a custom `--label` value was verified to still produce a
+watertight mesh.
+
+### Validation
+
+Not yet printed under this name.
+
+### Files
+
+- `jig-plate.py`
+
+### Generated Files
+
+- `jig_plate_1.1.0.stl`
+- `jig_plate_1.1.0_stack_coupon.stl`
 
 ---
 
