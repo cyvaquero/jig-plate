@@ -38,6 +38,10 @@ Changelog
          library (build_plate()); this script is now a thin CLI wrapper
          around it -- a shift in how the plate is generated, default
          output unchanged
+  2.0.0  major release: two-file architecture becomes the project's public
+         structure -- jig_plate_base.build_plate() is the supported API for
+         other generator scripts to build on this base plate, jig-plate.py
+         is CLI-only. Default output unchanged.
 """
 import argparse
 from pathlib import Path
@@ -51,7 +55,7 @@ from matplotlib.patches import FancyBboxPatch
 
 from jig_plate_base import build_plate, bx
 
-VERSION = "1.1.1"
+VERSION = "2.0.0"
 OUT_DIR = Path(__file__).resolve().parent / "output"
 
 
