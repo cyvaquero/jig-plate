@@ -143,7 +143,7 @@ def _add_deboss_left(poly_list, target, plate_y, deboss_d):
 def build_plate(
     *,
     plate_x=246.0, plate_y=218.0, plate_z=9.0,
-    front_margin=10.0, back_margin=17.0,
+    front_margin=10.0, back_margin=10.0,
     mag_d=6.1, mag_depth=3.2, mag_count_x=4, mag_inset_x=30.75,
     bottom_mag_inset_x=20.0,
     stack_w=1.5, stack_len=6.0, stack_h=1.5, stack_play=0.2,
