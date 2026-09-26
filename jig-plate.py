@@ -42,6 +42,12 @@ Changelog
          structure -- jig_plate_base.build_plate() is the supported API for
          other generator scripts to build on this base plate, jig-plate.py
          is CLI-only. Default output unchanged.
+  2.0.1  default back_margin 17 -> 10 mm, matching the already-validated
+         front_margin value; moves the back-corner mounting magnet bore
+         and stacking rib/groove 3.5 mm closer to the back edge (bore-to-
+         edge clearance 5.45 -> 1.95 mm, same clearance the front bore
+         already has). Verified no collision with the stacking rib/groove
+         (disjoint in X) and still watertight; volume/bbox unchanged.
 """
 import argparse
 from pathlib import Path
@@ -55,7 +61,7 @@ from matplotlib.patches import FancyBboxPatch
 
 from jig_plate_base import build_plate, bx
 
-VERSION = "2.0.0"
+VERSION = "2.0.1"
 OUT_DIR = Path(__file__).resolve().parent / "output"
 
 
