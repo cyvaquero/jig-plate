@@ -5,7 +5,7 @@
 | **Generator (CLI)** | `jig-plate.py` |
 | **Generator (library)** | `jig_plate_base.py` (`build_plate()`) |
 | **Meshes** | `jig_plate_<version>.stl` |
-| **Latest release** | 2.1.0 |
+| **Latest release** | 2.2.0 |
 
 ## Versioning
 
@@ -15,7 +15,7 @@
 |---|---|
 | `major` | Bumped only on explicit command; zeroes minor and iterative |
 | `minor` | Bumped only on explicit command; zeroes iterative |
-| `iterative` | Incremented automatically on every change to the model geometry or to how the model is generated (parameters, CLI options, generation logic), even if the default output is unaffected |
+| `iterative` | Incremented automatically on any change to the generated model: a change to the plate's default output (geometry, dimensions, positions) *or* a change to how the model is generated (parameters, CLI options, generation logic), even if the default output itself is unaffected. A default-output change is the clearer, more common case. |
 
 **This file records major and minor releases only,** newest first. Iterative
 changes are not given entries here; they are folded into the next minor release
@@ -25,6 +25,49 @@ block in the generator docstring, which is updated on every model change.
 Each version's number appears in three places and they are kept in sync: the
 generator filename, the mesh filenames, and the 80-byte binary STL header of
 each mesh (readable with `head -c 80 file.stl`).
+
+---
+
+## 2.2.0 — Corner stacking joint tightened and validated
+
+Minor release. Folds iterative changes 2.1.1–2.1.3 into a versioned
+release.
+
+### Changed
+
+- **Corner stacking rib/groove reinset**: `stack_inset_x` 6 → 4 mm, and a
+  new `stack_inset_y` (4 mm) decouples the rib/groove's Y position from
+  the mounting-magnet border bands it previously borrowed — now a fixed
+  4 mm inset from each corner on both axes.
+- **Bottom-corner mounting magnets brought in**: `bottom_mag_inset_x`
+  20 → 12 mm, toward the stacking rib/groove (the nearer feature — their
+  Y-bands already overlapped; only X separated them). Gives a 1.85 mm
+  wall between magnet bore and stacking rib/groove.
+- **Stacking groove gained fit play lengthwise**: `stack_play` now widens
+  the groove on both axes (previously width-only). Groove is
+  6.2 × 1.7 mm against a 6.0 × 1.5 mm rib.
+
+### Result
+
+481.5 cm³, bounding box 246 × 218 × 10.5 mm — unchanged from 2.1.0 at
+display precision. Tightest perimeter wall on the plate is now 0.9 mm
+(stacking-groove edge clearance), down from 3 mm at 2.1.0.
+
+### Validation
+
+**Corner stacking coupon printed and physically test-stacked: fit
+confirmed good.** First physical validation of the stacking joint since
+the corner-tightening changes in this release.
+
+### Files
+
+- `jig-plate.py`
+- `jig_plate_base.py`
+
+### Generated Files
+
+- `jig_plate_2.2.0.stl`
+- `jig_plate_2.2.0_stack_coupon.stl`
 
 ---
 
