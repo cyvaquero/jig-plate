@@ -5,7 +5,7 @@
 | **Generator (CLI)** | `jig-plate.py` |
 | **Generator (library)** | `jig_plate_base.py` (`build_plate()`) |
 | **Meshes** | `jig_plate_<version>.stl` |
-| **Latest release** | 2.3.0 |
+| **Latest release** | 2.4.0 |
 
 ## Versioning
 
@@ -25,6 +25,68 @@ block in the generator docstring, which is updated on every model change.
 Each version's number appears in three places and they are kept in sync: the
 generator filename, the mesh filenames, and the 80-byte binary STL header of
 each mesh (readable with `head -c 80 file.stl`).
+
+---
+
+## 2.4.0 — Bottom-face honeycomb lightening cutout
+
+Minor release. Folds iterative changes 2.3.1–2.3.3 into a versioned
+release.
+
+### Added
+
+- **Honeycomb lightening cutout on the bottom face.** A hex grid of blind
+  pockets is cut up from the bottom face by default, leaving a thin top
+  skin (`honeycomb_skin`, 2.4 mm) and a honeycomb wall between cells
+  (`honeycomb_wall`, 2.6 mm). Cell size (`honeycomb_af`, default 22 mm
+  across flats — also exposed as `--honeycomb-af` on the CLI) and
+  orientation match eu-business-card-jig's vented pocket floor. The
+  lattice is built full-coverage across the margin-inset field
+  (`honeycomb_margin_x`/`honeycomb_margin_y`) and then clipped — via a
+  boolean intersection against that field and a boolean difference
+  against the bottom-corner mounting-magnet-bore and corner
+  stacking-rib/groove footprints (with clearance) — rather than dropping
+  any cell that doesn't fit whole; sub-3 mm² slivers left over from
+  clipping are discarded. Opt out with `honeycomb_enabled=False` for a
+  solid underside. New keyword arguments only — no existing parameter's
+  default or signature changed.
+
+### Why
+
+The base plate was a near-solid slab (91% of its default volume being a
+uniform 9 mm block), which is unnecessary material and print time for a
+part that's mostly a rigid spacer between the top registration surface
+and the bottom mounting/stacking features. A honeycomb wins over a plain
+rectangular waffle grid on convex-cell packing efficiency, and clipping
+boundary cells (instead of dropping them) recovers material a
+drop-if-it-doesn't-fit grid would otherwise waste at the field edges. The
+22 mm default cell size was chosen over the initial 23.1 mm match to
+eu-business-card-jig as a deliberate, slightly denser trade of a little
+extra wall material for a tighter, more supportive lattice.
+
+### Result
+
+**285.5 cm³, bounding box 246 × 218 × 10.5 mm — down from 481.5 cm³ at
+2.3.0, a 40.7% reduction.** Top face, all 12 magnet bores, and the corner
+stacking rib/groove system are geometrically untouched; the stack coupon
+is unchanged at 8.09 cm³. Verified watertight (plate and coupon).
+
+### Validation
+
+Not yet printed under this name. The corner stacking joint this release
+depends on (2.2.0) was already printed and physically test-stacked with
+a confirmed good fit; the honeycomb floor itself has not been physically
+load-tested for rigidity under clamping pressure.
+
+### Files
+
+- `jig-plate.py`
+- `jig_plate_base.py`
+
+### Generated Files
+
+- `jig_plate_2.4.0.stl`
+- `jig_plate_2.4.0_stack_coupon.stl`
 
 ---
 

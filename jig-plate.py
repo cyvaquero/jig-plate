@@ -110,6 +110,13 @@ Changelog
          smaller cells leave proportionally more wall material). Top
          face, all magnet bores, and the stacking rib/groove/coupon are
          untouched. Verified still watertight.
+  2.4.0  minor release folding 2.3.1-2.3.3. Bottom-face honeycomb
+         lightening cutout (22 mm cells across flats, 2.6 mm walls,
+         boundary cells clipped rather than dropped) with cell size
+         exposed via --honeycomb-af. Default plate volume
+         481.5 -> 285.5 cm3 (-40.7%); top face, all magnet bores, and the
+         stacking rib/groove/coupon are untouched. Verified still
+         watertight.
 """
 import argparse
 from pathlib import Path
@@ -123,7 +130,7 @@ from matplotlib.patches import FancyBboxPatch
 
 from jig_plate_base import build_plate, bx
 
-VERSION = "2.3.3"
+VERSION = "2.4.0"
 OUT_DIR = Path(__file__).resolve().parent / "output"
 
 
