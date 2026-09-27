@@ -100,6 +100,10 @@ Changelog
          volume drops 481.5 -> 282.0 cm3 (-41.4%); top face, all magnet
          bores, and the stacking rib/groove/coupon are untouched. Verified
          still watertight.
+  2.3.2  new --honeycomb-af CLI flag exposes build_plate()'s honeycomb_af
+         parameter (cell size, mm across flats), default unchanged at
+         23.1. Default plate output unaffected; verified still watertight
+         at the default and at a sample override (--honeycomb-af 30).
 """
 import argparse
 from pathlib import Path
@@ -113,7 +117,7 @@ from matplotlib.patches import FancyBboxPatch
 
 from jig_plate_base import build_plate, bx
 
-VERSION = "2.3.1"
+VERSION = "2.3.2"
 OUT_DIR = Path(__file__).resolve().parent / "output"
 
 
@@ -642,9 +646,15 @@ def main():
              'mark (the logo itself is not parameterized). '
              'Default: "Jig Plate".',
     )
+    parser.add_argument(
+        "--honeycomb-af", type=float, default=23.1,
+        help="Honeycomb lightening-cutout cell size, in mm across flats. "
+             "Default: 23.1 (matches eu-business-card-jig's vented pocket "
+             "floor).",
+    )
     args = parser.parse_args()
 
-    result = build_plate(label=args.label)
+    result = build_plate(label=args.label, honeycomb_af=args.honeycomb_af)
     solid = result.solid
     geom = result.geometry
 
