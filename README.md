@@ -34,6 +34,13 @@ below.
     with roughly 8x fewer pockets to print — fewer perimeter loops and
     travel moves at the cost of wider, less-distributed unsupported
     spans under the top skin
+  - `none` — solid underside, no lightening cutout
+
+  Every `honeycomb_*`/`coffer_*` dimension (wall/rib thickness, top skin,
+  cell size or pocket count, field margins) is also exposed as its own
+  `--honeycomb-*`/`--coffer-*` flag; passing one that doesn't match the
+  active `--lightening` pattern prints a warning and is ignored rather
+  than silently doing nothing.
 - **Debossed branding** — logo mark plus a text label (default "Jig Plate",
   override with `--label`) recessed into the top face's front frame edge,
   duplicated on the left and right faces (each mirrored to read correctly
@@ -66,6 +73,17 @@ python3 -m venv .venv
 
 ```bash
 .venv/bin/python jig-plate.py
+```
+
+## Tests
+
+Unit tests cover `jig_plate_base.build_plate()` directly (watertightness,
+volume, bounding box, and the design constraints in `CLAUDE.md`) -- fast
+enough to run after every change, no need to run the full CLI/diagram
+pipeline just to check the geometry is still sound:
+
+```bash
+.venv/bin/pytest
 ```
 
 Optionally override the debossed text label (the logo mark is always
