@@ -128,6 +128,13 @@ Changelog
          each honeycomb cell during printing (plate prints bottom-face-
          down per the README) and has not been physically validated for
          sag/warp at this thickness.
+  2.4.2  new CLI flags expose the rest of build_plate()'s honeycomb
+         parameters: --honeycomb-wall, --honeycomb-skin,
+         --honeycomb-margin-x, --honeycomb-margin-y, and --no-honeycomb
+         (solid underside). All defaults unchanged. Default plate output
+         unaffected; verified still watertight at the default, with
+         --no-honeycomb (481.5 cm3, matches the solid baseline), and with
+         a sample override of every new flag together.
 """
 import argparse
 from pathlib import Path
@@ -141,7 +148,7 @@ from matplotlib.patches import FancyBboxPatch
 
 from jig_plate_base import build_plate, bx
 
-VERSION = "2.4.1"
+VERSION = "2.4.2"
 OUT_DIR = Path(__file__).resolve().parent / "output"
 
 
@@ -675,9 +682,43 @@ def main():
         help="Honeycomb lightening-cutout cell size, in mm across flats. "
              "Default: 22.0.",
     )
+    parser.add_argument(
+        "--honeycomb-wall", type=float, default=2.6,
+        help="Honeycomb lightening-cutout wall thickness between cells, "
+             "in mm. Default: 2.6.",
+    )
+    parser.add_argument(
+        "--honeycomb-skin", type=float, default=1.2,
+        help="Honeycomb lightening-cutout top skin thickness left uncut, "
+             "in mm. Default: 1.2 (a 3-perimeter minimum shell at a "
+             "0.4 mm nozzle) -- thinner risks sag/warp on the top face, "
+             "which bridges unsupported across each cell while printing.",
+    )
+    parser.add_argument(
+        "--honeycomb-margin-x", type=float, default=16.0,
+        help="Honeycomb lightening-cutout field inset from the left/right "
+             "edges, in mm. Default: 16.0.",
+    )
+    parser.add_argument(
+        "--honeycomb-margin-y", type=float, default=22.0,
+        help="Honeycomb lightening-cutout field inset from the front/back "
+             "edges, in mm. Default: 22.0.",
+    )
+    parser.add_argument(
+        "--no-honeycomb", action="store_true",
+        help="Disable the honeycomb lightening cutout for a solid "
+             "underside (build_plate()'s honeycomb_enabled=False).",
+    )
     args = parser.parse_args()
 
-    result = build_plate(label=args.label, honeycomb_af=args.honeycomb_af)
+    result = build_plate(
+        label=args.label,
+        honeycomb_enabled=not args.no_honeycomb,
+        honeycomb_af=args.honeycomb_af, honeycomb_wall=args.honeycomb_wall,
+        honeycomb_skin=args.honeycomb_skin,
+        honeycomb_margin_x=args.honeycomb_margin_x,
+        honeycomb_margin_y=args.honeycomb_margin_y,
+    )
     solid = result.solid
     geom = result.geometry
 
