@@ -1,6 +1,6 @@
 [project]
 name = "jig-plate"
-version = "2.4.3"
+version = "2.4.4"
 description = "Parametric 3D-printable stackable laser jig base plate, magnets + stacking ribs/grooves"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -11,3 +11,7 @@ dependencies = [
     "shapely",
     "matplotlib",
 ]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
