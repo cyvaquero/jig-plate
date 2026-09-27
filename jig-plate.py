@@ -117,6 +117,17 @@ Changelog
          481.5 -> 285.5 cm3 (-40.7%); top face, all magnet bores, and the
          stacking rib/groove/coupon are untouched. Verified still
          watertight.
+  2.4.1  honeycomb_skin default reduced 2.4 -> 1.2 mm (3-perimeter
+         minimum shell at a 0.4 mm nozzle) -- the honeycomb pockets
+         already cut up to plate_z - honeycomb_skin, so this thins the
+         solid top skin they stop at rather than changing what they cut
+         up to. Default plate volume 285.5 -> 249.8 cm3 (-48.1% vs the
+         solid baseline, up from -40.7%). Top face, all magnet bores, and
+         the stacking rib/groove/coupon are untouched. Verified still
+         watertight; the top face bridges an unsupported ~19 mm span over
+         each honeycomb cell during printing (plate prints bottom-face-
+         down per the README) and has not been physically validated for
+         sag/warp at this thickness.
 """
 import argparse
 from pathlib import Path
@@ -130,7 +141,7 @@ from matplotlib.patches import FancyBboxPatch
 
 from jig_plate_base import build_plate, bx
 
-VERSION = "2.4.0"
+VERSION = "2.4.1"
 OUT_DIR = Path(__file__).resolve().parent / "output"
 
 
