@@ -61,6 +61,17 @@ python3 -m venv .venv
 .venv/bin/python jig-plate.py
 ```
 
+## Tests
+
+Unit tests cover `jig_plate_base.build_plate()` directly (watertightness,
+volume, bounding box, and the design constraints in `CLAUDE.md`) -- fast
+enough to run after every change, no need to run the full CLI/diagram
+pipeline just to check the geometry is still sound:
+
+```bash
+.venv/bin/pytest
+```
+
 Optionally override the debossed text label (the logo mark is always
 included and is not parameterized):
 
