@@ -104,6 +104,12 @@ Changelog
          parameter (cell size, mm across flats), default unchanged at
          23.1. Default plate output unaffected; verified still watertight
          at the default and at a sample override (--honeycomb-af 30).
+  2.3.3  default honeycomb_af 23.1 -> 22.0 mm (across flats), and the
+         --honeycomb-af CLI default follows. Default plate volume
+         282.0 -> 285.5 cm3 (-41.4% -> -40.7% vs the solid baseline --
+         smaller cells leave proportionally more wall material). Top
+         face, all magnet bores, and the stacking rib/groove/coupon are
+         untouched. Verified still watertight.
 """
 import argparse
 from pathlib import Path
@@ -117,7 +123,7 @@ from matplotlib.patches import FancyBboxPatch
 
 from jig_plate_base import build_plate, bx
 
-VERSION = "2.3.2"
+VERSION = "2.3.3"
 OUT_DIR = Path(__file__).resolve().parent / "output"
 
 
@@ -647,10 +653,9 @@ def main():
              'Default: "Jig Plate".',
     )
     parser.add_argument(
-        "--honeycomb-af", type=float, default=23.1,
+        "--honeycomb-af", type=float, default=22.0,
         help="Honeycomb lightening-cutout cell size, in mm across flats. "
-             "Default: 23.1 (matches eu-business-card-jig's vented pocket "
-             "floor).",
+             "Default: 22.0.",
     )
     args = parser.parse_args()
 

@@ -272,7 +272,7 @@ def build_plate(
     stack_inset_x=4.0, stack_inset_y=4.0,
     label="Jig Plate", deboss_d=0.3,
     honeycomb_enabled=True, honeycomb_skin=2.4, honeycomb_wall=2.6,
-    honeycomb_af=23.1, honeycomb_margin_x=16.0, honeycomb_margin_y=22.0,
+    honeycomb_af=22.0, honeycomb_margin_x=16.0, honeycomb_margin_y=22.0,
 ):
     """Build the jig plate base solid.
 
