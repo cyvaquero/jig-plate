@@ -197,6 +197,9 @@ def build_plate(
     Returns a `PlateResult` (`.solid`: trimesh.Trimesh, `.geometry`:
     PlateGeometry). Pure -- no file I/O, no argv, no printing.
     """
+    if not label.strip():
+        raise ValueError("label must not be empty or whitespace-only")
+
     mag_xs = [
         mag_inset_x + i * (plate_x - 2 * mag_inset_x) / (mag_count_x - 1)
         for i in range(mag_count_x)
@@ -223,7 +226,7 @@ def build_plate(
             cuts.append(c)
 
     # bottom-face corner mounting magnet bores. Inset kept close to the
-    # corner stacking rib/groove (1.95 mm wall between them in X, the same
+    # corner stacking rib/groove (1.85 mm wall between them in X, the same
     # clearance value already used elsewhere in this design) rather than
     # the plate edge, since the rib/groove -- not the edge -- is the
     # nearest feature at the default stack_inset_x/_y.
@@ -256,7 +259,7 @@ def build_plate(
                     my - (stack_w + stack_play) / 2, -0.1,
                     mx + (stack_len + stack_play) / 2,
                     my + (stack_w + stack_play) / 2,
-                    stack_h + 0.1,
+                    stack_h,
                 )
             )
 
