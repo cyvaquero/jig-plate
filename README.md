@@ -23,10 +23,17 @@ below.
   back faces, symmetric about the centreline so plates mate either way round
 - **4 more magnet bores** (same Ø6.1 mm / 6 × 3 mm spec) in the bottom-face
   corners, for mounting the plate itself
-- **Honeycomb lightening cutout** in the bottom face — a hex grid of blind
-  pockets (22 mm across flats, 2.6 mm walls) leaving a 1.2 mm top skin,
-  clipped at the margin field and around every magnet bore and stacking
-  rib/groove rather than just avoided, cutting plate volume by ~48%
+- **Bottom-face lightening cutout**, selectable via `--lightening`:
+  - `honeycomb` (default) — a hex grid of blind pockets (22 mm across
+    flats, 2.6 mm walls) leaving a 1.2 mm top skin, clipped at the margin
+    field and around every magnet bore and stacking rib/groove rather
+    than just avoided, cutting plate volume by ~48%
+  - `coffer` — a sparse `--coffer-cols` x `--coffer-rows` grid of large
+    rectangular pockets (4 x 3 = 12 by default, 5 mm ribs, same 1.2 mm
+    skin), removing about the same material (~47%) as the honeycomb but
+    with roughly 8x fewer pockets to print — fewer perimeter loops and
+    travel moves at the cost of wider, less-distributed unsupported
+    spans under the top skin
 - **Debossed branding** — logo mark plus a text label (default "Jig Plate",
   override with `--label`) recessed into the top face's front frame edge,
   duplicated on the left and right faces (each mirrored to read correctly
@@ -77,6 +84,12 @@ included and is not parameterized):
 
 ```bash
 .venv/bin/python jig-plate.py --label "Card Jig"
+```
+
+Or switch the bottom-face lightening pattern:
+
+```bash
+.venv/bin/python jig-plate.py --lightening coffer
 ```
 
 Generates into `output/`:

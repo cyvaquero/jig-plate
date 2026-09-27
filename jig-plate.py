@@ -128,15 +128,47 @@ Changelog
          each honeycomb cell during printing (plate prints bottom-face-
          down per the README) and has not been physically validated for
          sag/warp at this thickness.
-  2.4.2  new CLI flags expose the rest of build_plate()'s honeycomb
+  2.4.2  new sparse-coffer bottom-face lightening cutout added to
+         build_plate() as an alternative to the honeycomb (new
+         coffer_enabled/coffer_skin/coffer_rib/coffer_cols/coffer_rows/
+         coffer_margin_x/coffer_margin_y params, default
+         coffer_enabled=False -- honeycomb stays the default), plus a new
+         --lightening {honeycomb,coffer} CLI flag (default honeycomb) with
+         --coffer-rib/--coffer-cols/--coffer-rows to tune it. Coffer is a
+         cols x rows grid of large rectangular pockets (4x3 = 12 by
+         default, 5 mm ribs) instead of the honeycomb's ~99 cells -- ~8x
+         fewer islands to print for essentially the same material removal
+         (254.5 cm3 / -47.2% vs the honeycomb's 249.8 cm3 / -48.1%),
+         trading distributed bridge spans for fewer, wider ones. Default
+         plate output unchanged; verified both paths still watertight.
+  2.4.3  new --coffer-skin CLI flag (default 1.2, matching
+         build_plate()'s coffer_skin default) for parity with the
+         honeycomb path's skin control. Also: --honeycomb-af,
+         --coffer-rib, --coffer-cols, --coffer-rows, and --coffer-skin
+         now warn to stderr when passed opposite what --lightening
+         selects (e.g. --coffer-rib with --lightening honeycomb, the
+         default) instead of silently doing nothing -- the build still
+         proceeds using only the selected pattern's options. Default
+         plate output unaffected; verified still watertight at the
+         default, with --coffer-skin overridden, and with each warning
+         path triggered.
+  2.4.4  new CLI flags expose the rest of build_plate()'s honeycomb
          parameters: --honeycomb-wall, --honeycomb-skin,
-         --honeycomb-margin-x, --honeycomb-margin-y, and --no-honeycomb
-         (solid underside). All defaults unchanged. Default plate output
+         --honeycomb-margin-x, --honeycomb-margin-y. --lightening gains a
+         third choice, 'none', for a solid underside, folding in what a
+         separately-developed --no-honeycomb flag would have done --
+         --lightening is now the single switch across all three patterns
+         rather than two overlapping toggles. All new-flag defaults
+         unchanged. Also: unit tests added for jig_plate_base.build_plate()
+         (32 tests, ~3s, via `pytest`) covering watertightness, volume/bbox
+         regression, every honeycomb_*/coffer_* parameter across its
+         range, and the CLAUDE.md design constraints. Default plate output
          unaffected; verified still watertight at the default, with
-         --no-honeycomb (481.5 cm3, matches the solid baseline), and with
-         a sample override of every new flag together.
+         --lightening none (481.5 cm3, matches the solid baseline), and
+         with a combined override of every new flag.
 """
 import argparse
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -148,7 +180,7 @@ from matplotlib.patches import FancyBboxPatch
 
 from jig_plate_base import build_plate, bx
 
-VERSION = "2.4.2"
+VERSION = "2.4.4"
 OUT_DIR = Path(__file__).resolve().parent / "output"
 
 
@@ -677,47 +709,112 @@ def main():
              'mark (the logo itself is not parameterized). '
              'Default: "Jig Plate".',
     )
+    # every honeycomb-*/coffer-* flag defaults to None here (not its real
+    # default) so we can tell whether the user actually passed it, to warn
+    # when it doesn't match --lightening; real defaults are applied below.
     parser.add_argument(
-        "--honeycomb-af", type=float, default=22.0,
+        "--lightening", choices=["honeycomb", "coffer", "none"],
+        default="honeycomb",
+        help="Bottom-face lightening cutout pattern. 'honeycomb' (default) "
+             "is a fine hex grid (~99 cells at the default field size); "
+             "'coffer' is a sparse grid of a few large rectangular "
+             "pockets (--coffer-cols x --coffer-rows, 12 by default) with "
+             "wider ribs -- similar material removal with far fewer "
+             "islands to print, at the cost of bigger unsupported bridge "
+             "spans under the top skin; 'none' leaves a solid underside.",
+    )
+    parser.add_argument(
+        "--honeycomb-af", type=float, default=None,
         help="Honeycomb lightening-cutout cell size, in mm across flats. "
+             "Only used with --lightening honeycomb. Default: 22.0.",
+    )
+    parser.add_argument(
+        "--honeycomb-wall", type=float, default=None,
+        help="Honeycomb lightening-cutout wall thickness between cells, "
+             "in mm. Only used with --lightening honeycomb. Default: 2.6.",
+    )
+    parser.add_argument(
+        "--honeycomb-skin", type=float, default=None,
+        help="Honeycomb lightening-cutout top skin thickness left uncut, "
+             "in mm. Only used with --lightening honeycomb. Default: 1.2 "
+             "(a 3-perimeter minimum shell at a 0.4 mm nozzle) -- thinner "
+             "risks sag/warp on the top face, which bridges unsupported "
+             "across each cell while printing.",
+    )
+    parser.add_argument(
+        "--honeycomb-margin-x", type=float, default=None,
+        help="Honeycomb lightening-cutout field inset from the left/right "
+             "edges, in mm. Only used with --lightening honeycomb. "
+             "Default: 16.0.",
+    )
+    parser.add_argument(
+        "--honeycomb-margin-y", type=float, default=None,
+        help="Honeycomb lightening-cutout field inset from the front/back "
+             "edges, in mm. Only used with --lightening honeycomb. "
              "Default: 22.0.",
     )
     parser.add_argument(
-        "--honeycomb-wall", type=float, default=2.6,
-        help="Honeycomb lightening-cutout wall thickness between cells, "
-             "in mm. Default: 2.6.",
+        "--coffer-rib", type=float, default=None,
+        help="Coffer lightening-cutout rib width between pockets, in mm. "
+             "Only used with --lightening coffer. Default: 5.0.",
     )
     parser.add_argument(
-        "--honeycomb-skin", type=float, default=1.2,
-        help="Honeycomb lightening-cutout top skin thickness left uncut, "
-             "in mm. Default: 1.2 (a 3-perimeter minimum shell at a "
-             "0.4 mm nozzle) -- thinner risks sag/warp on the top face, "
-             "which bridges unsupported across each cell while printing.",
+        "--coffer-cols", type=int, default=None,
+        help="Coffer lightening-cutout pocket columns. Only used with "
+             "--lightening coffer. Default: 4.",
     )
     parser.add_argument(
-        "--honeycomb-margin-x", type=float, default=16.0,
-        help="Honeycomb lightening-cutout field inset from the left/right "
-             "edges, in mm. Default: 16.0.",
+        "--coffer-rows", type=int, default=None,
+        help="Coffer lightening-cutout pocket rows. Only used with "
+             "--lightening coffer. Default: 3.",
     )
     parser.add_argument(
-        "--honeycomb-margin-y", type=float, default=22.0,
-        help="Honeycomb lightening-cutout field inset from the front/back "
-             "edges, in mm. Default: 22.0.",
-    )
-    parser.add_argument(
-        "--no-honeycomb", action="store_true",
-        help="Disable the honeycomb lightening cutout for a solid "
-             "underside (build_plate()'s honeycomb_enabled=False).",
+        "--coffer-skin", type=float, default=None,
+        help="Coffer lightening-cutout top skin thickness left uncut, in "
+             "mm. Only used with --lightening coffer. Default: 1.2.",
     )
     args = parser.parse_args()
 
+    honeycomb_args = {
+        "af": args.honeycomb_af, "wall": args.honeycomb_wall,
+        "skin": args.honeycomb_skin, "margin-x": args.honeycomb_margin_x,
+        "margin-y": args.honeycomb_margin_y,
+    }
+    coffer_args = {
+        "rib": args.coffer_rib, "cols": args.coffer_cols,
+        "rows": args.coffer_rows, "skin": args.coffer_skin,
+    }
+    honeycomb_passed = [k for k, v in honeycomb_args.items() if v is not None]
+    coffer_passed = [k for k, v in coffer_args.items() if v is not None]
+    if args.lightening != "honeycomb" and honeycomb_passed:
+        print(
+            "warning: "
+            + ", ".join(f"--honeycomb-{k}" for k in honeycomb_passed)
+            + f" ignored with --lightening {args.lightening}",
+            file=sys.stderr,
+        )
+    if args.lightening != "coffer" and coffer_passed:
+        print(
+            "warning: "
+            + ", ".join(f"--coffer-{k}" for k in coffer_passed)
+            + f" ignored with --lightening {args.lightening}"
+            + (" (the default)" if args.lightening == "honeycomb" else ""),
+            file=sys.stderr,
+        )
+
     result = build_plate(
         label=args.label,
-        honeycomb_enabled=not args.no_honeycomb,
-        honeycomb_af=args.honeycomb_af, honeycomb_wall=args.honeycomb_wall,
-        honeycomb_skin=args.honeycomb_skin,
-        honeycomb_margin_x=args.honeycomb_margin_x,
-        honeycomb_margin_y=args.honeycomb_margin_y,
+        honeycomb_enabled=args.lightening == "honeycomb",
+        honeycomb_af=args.honeycomb_af if args.honeycomb_af is not None else 22.0,
+        honeycomb_wall=args.honeycomb_wall if args.honeycomb_wall is not None else 2.6,
+        honeycomb_skin=args.honeycomb_skin if args.honeycomb_skin is not None else 1.2,
+        honeycomb_margin_x=args.honeycomb_margin_x if args.honeycomb_margin_x is not None else 16.0,
+        honeycomb_margin_y=args.honeycomb_margin_y if args.honeycomb_margin_y is not None else 22.0,
+        coffer_enabled=args.lightening == "coffer",
+        coffer_rib=args.coffer_rib if args.coffer_rib is not None else 5.0,
+        coffer_cols=args.coffer_cols if args.coffer_cols is not None else 4,
+        coffer_rows=args.coffer_rows if args.coffer_rows is not None else 3,
+        coffer_skin=args.coffer_skin if args.coffer_skin is not None else 1.2,
     )
     solid = result.solid
     geom = result.geometry
