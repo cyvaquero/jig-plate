@@ -56,6 +56,13 @@ class PlateGeometry:
     honeycomb_af: float
     honeycomb_margin_x: float
     honeycomb_margin_y: float
+    coffer_enabled: bool
+    coffer_skin: float
+    coffer_rib: float
+    coffer_cols: int
+    coffer_rows: int
+    coffer_margin_x: float
+    coffer_margin_y: float
 
 
 @dataclasses.dataclass(frozen=True)
@@ -262,6 +269,88 @@ def _honeycomb_cuts(
     return cuts
 
 
+def _coffer_field_polys(x0, x1, y0, y1, cols, rows, rib):
+    """Rectangular pocket grid: `cols` x `rows` pockets separated by `rib`-wide
+    ribs (and framed by a `rib`-wide margin on all four sides of the field),
+    covering the [x0, x1] x [y0, y1] rectangle. Sparse-coffer counterpart to
+    `_hex_field_polys` -- a handful of large rectangular holes instead of
+    dozens of small hex cells, trading distributed unsupported spans for far
+    fewer islands to trace when printing the pocketed floor."""
+    span_x = x1 - x0
+    span_y = y1 - y0
+    pocket_w = (span_x - rib * (cols + 1)) / cols
+    pocket_h = (span_y - rib * (rows + 1)) / rows
+    polys = []
+    if pocket_w <= 0 or pocket_h <= 0:
+        return polys
+    for c in range(cols):
+        px0 = x0 + rib + c * (pocket_w + rib)
+        px1 = px0 + pocket_w
+        for r in range(rows):
+            py0 = y0 + rib + r * (pocket_h + rib)
+            py1 = py0 + pocket_h
+            polys.append(shapely_box(px0, py0, px1, py1))
+    return polys
+
+
+def _coffer_cuts(
+    plate_x, plate_y, plate_z,
+    coffer_skin, coffer_rib, coffer_cols, coffer_rows,
+    coffer_margin_x, coffer_margin_y,
+    bottom_mag_inset_x, bottom_mag_ys, mag_d,
+    stack_xs, stack_ys, stack_w, stack_len,
+):
+    """Bottom-face sparse-coffer lightening cutout: a small grid of large
+    rectangular blind pockets cut up from z=0, leaving the same thin
+    `coffer_skin` top skin as the honeycomb path, separated by `coffer_rib`
+    -wide ribs.
+
+    Same margin + exclusion-zone approach as `_honeycomb_cuts`: pockets are
+    built to fill the margin-inset field, then clipped around the
+    bottom-corner mounting magnet bores and the corner stacking rib/groove
+    footprints (with clearance) via boolean difference, so a pocket reaching
+    into either gets clipped there instead of relying on margins alone.
+    Prototype for comparing island count (and thus print speed on a
+    pocketed floor) against the honeycomb's many small cells -- see
+    CLAUDE.md's design-constraints note on this being blank-agnostic, and
+    jig-plate's README for the honeycomb this sits alongside.
+    """
+    cuts = []
+    x0, x1 = coffer_margin_x, plate_x - coffer_margin_x
+    y0, y1 = coffer_margin_y, plate_y - coffer_margin_y
+    if x1 <= x0 or y1 <= y0:
+        return cuts
+
+    pocket_top_z = plate_z - coffer_skin  # cut from the bottom up to here
+
+    field = unary_union(
+        _coffer_field_polys(x0, x1, y0, y1, coffer_cols, coffer_rows, coffer_rib)
+    )
+
+    excl = []
+    mag_r = mag_d / 2 + 2.0
+    for mx in (bottom_mag_inset_x, plate_x - bottom_mag_inset_x):
+        for my in bottom_mag_ys:
+            excl.append(shapely_box(mx - mag_r, my - mag_r, mx + mag_r, my + mag_r))
+    stack_clear = 2.0
+    for sx in stack_xs:
+        for sy in stack_ys:
+            excl.append(shapely_box(
+                sx - stack_len / 2 - stack_clear, sy - stack_w / 2 - stack_clear,
+                sx + stack_len / 2 + stack_clear, sy + stack_w / 2 + stack_clear,
+            ))
+    if excl:
+        field = field.difference(unary_union(excl))
+
+    min_sliver_area = 3.0  # drop fragments too small to print cleanly
+    geoms = list(field.geoms) if hasattr(field, "geoms") else [field]
+    for g in geoms:
+        if not isinstance(g, Polygon) or g.is_empty or g.area < min_sliver_area:
+            continue
+        cuts.append(extrude_polygon(g, height=pocket_top_z))
+    return cuts
+
+
 def build_plate(
     *,
     plate_x=246.0, plate_y=218.0, plate_z=9.0,
@@ -273,6 +362,8 @@ def build_plate(
     label="Jig Plate", deboss_d=0.3,
     honeycomb_enabled=True, honeycomb_skin=1.2, honeycomb_wall=2.6,
     honeycomb_af=22.0, honeycomb_margin_x=16.0, honeycomb_margin_y=22.0,
+    coffer_enabled=False, coffer_skin=1.2, coffer_rib=5.0,
+    coffer_cols=4, coffer_rows=3, coffer_margin_x=16.0, coffer_margin_y=22.0,
 ):
     """Build the jig plate base solid.
 
@@ -297,6 +388,20 @@ def build_plate(
     difference, so boundary cells are cut short rather than omitted -- see
     `_honeycomb_cuts`. Pass `honeycomb_enabled=False` for a solid
     underside.
+
+    An alternative bottom-face lightening cutout is available opt-in via
+    `coffer_enabled=True` (default `False`, so it never changes the default
+    plate): a sparse `coffer_cols` x `coffer_rows` grid of large rectangular
+    pockets separated by `coffer_rib`-wide ribs, under the same
+    `coffer_skin` top skin and inset `coffer_margin_x`/`coffer_margin_y`
+    from the plate edges, clipped around the same magnet-bore and
+    stacking-joint exclusion zones as the honeycomb path -- see
+    `_coffer_cuts`. Prototype: a handful of wide pockets means far fewer
+    islands for a slicer to trace than the honeycomb's many small hex
+    cells (faster printing), at the cost of wider, more concentrated
+    unsupported spans under the top skin. Independent of
+    `honeycomb_enabled` -- enabling both cuts both patterns into the same
+    face, which is not the intended use but will not break the boolean.
 
     Returns a `PlateResult` (`.solid`: trimesh.Trimesh, `.geometry`:
     PlateGeometry). Pure -- no file I/O, no argv, no printing.
@@ -405,6 +510,15 @@ def build_plate(
             stack_xs, stack_ys, stack_w, stack_len,
         ))
 
+    if coffer_enabled:
+        cuts.extend(_coffer_cuts(
+            plate_x, plate_y, plate_z,
+            coffer_skin, coffer_rib, coffer_cols, coffer_rows,
+            coffer_margin_x, coffer_margin_y,
+            bottom_mag_inset_x, bottom_mag_ys, mag_d,
+            stack_xs, stack_ys, stack_w, stack_len,
+        ))
+
     plate = bx(0, 0, 0, plate_x, plate_y, plate_z)
     solid = trimesh.boolean.difference([plate] + cuts, engine="manifold")
     solid = trimesh.boolean.union([solid] + marks, engine="manifold")
@@ -423,5 +537,8 @@ def build_plate(
         honeycomb_enabled=honeycomb_enabled, honeycomb_skin=honeycomb_skin,
         honeycomb_wall=honeycomb_wall, honeycomb_af=honeycomb_af,
         honeycomb_margin_x=honeycomb_margin_x, honeycomb_margin_y=honeycomb_margin_y,
+        coffer_enabled=coffer_enabled, coffer_skin=coffer_skin,
+        coffer_rib=coffer_rib, coffer_cols=coffer_cols, coffer_rows=coffer_rows,
+        coffer_margin_x=coffer_margin_x, coffer_margin_y=coffer_margin_y,
     )
     return PlateResult(solid=solid, geometry=geometry)
