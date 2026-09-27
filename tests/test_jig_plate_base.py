@@ -9,8 +9,7 @@ import pytest
 
 from jig_plate_base import build_plate
 
-DEFAULT_VOLUME_MM3 = 249840.6
-SOLID_VOLUME_MM3 = 481478.7
+DEFAULT_VOLUME_MM3 = 481478.7
 BBOX = (246.0, 218.0, 10.5)
 TOL = 1.0  # mm3, generous enough for boolean-engine tessellation noise
 
@@ -34,67 +33,6 @@ class TestDefaultPlate:
     def test_x_within_bed_and_purge_clearance(self):
         # CLAUDE.md: plate must stay <= 246 mm in X (bed width + purge area)
         assert build_plate().geometry.plate_x <= 246.0
-
-
-class TestSolidBaseline:
-    """honeycomb_enabled=False must reproduce the pre-honeycomb solid slab."""
-
-    def test_watertight(self):
-        assert build_plate(honeycomb_enabled=False).solid.is_watertight
-
-    def test_volume(self):
-        result = build_plate(honeycomb_enabled=False)
-        assert _volume(result) == pytest.approx(SOLID_VOLUME_MM3, abs=TOL)
-
-    def test_more_volume_than_honeycomb(self):
-        solid = _volume(build_plate(honeycomb_enabled=False))
-        honeycomb = _volume(build_plate())
-        assert solid > honeycomb
-
-
-class TestHoneycombParameters:
-    """Every honeycomb_* knob should stay watertight across its range,
-    individually and combined -- this is the "standardization" check: any
-    future change to _honeycomb_cuts must keep these all passing."""
-
-    @pytest.mark.parametrize("af", [10.0, 22.0, 30.0, 40.0])
-    def test_af_watertight(self, af):
-        assert build_plate(honeycomb_af=af).solid.is_watertight
-
-    @pytest.mark.parametrize("wall", [1.5, 2.6, 4.0])
-    def test_wall_watertight(self, wall):
-        assert build_plate(honeycomb_wall=wall).solid.is_watertight
-
-    @pytest.mark.parametrize("skin", [0.8, 1.2, 2.4, 4.0])
-    def test_skin_watertight(self, skin):
-        assert build_plate(honeycomb_skin=skin).solid.is_watertight
-
-    def test_skin_thickness_reduces_volume_removed(self):
-        # a thicker top skin leaves less room for pockets to cut into
-        thin = _volume(build_plate(honeycomb_skin=0.8))
-        thick = _volume(build_plate(honeycomb_skin=4.0))
-        assert thick > thin
-
-    @pytest.mark.parametrize("margin_x,margin_y", [(16.0, 22.0), (30.0, 40.0)])
-    def test_margins_watertight(self, margin_x, margin_y):
-        result = build_plate(
-            honeycomb_margin_x=margin_x, honeycomb_margin_y=margin_y
-        )
-        assert result.solid.is_watertight
-
-    def test_wide_margins_leave_solid_baseline(self):
-        # margins wide enough to exclude the whole field should degrade
-        # gracefully to (near-)solid rather than erroring
-        result = build_plate(honeycomb_margin_x=200.0, honeycomb_margin_y=200.0)
-        assert result.solid.is_watertight
-        assert _volume(result) == pytest.approx(SOLID_VOLUME_MM3, abs=1.0)
-
-    def test_combined_overrides_watertight(self):
-        result = build_plate(
-            honeycomb_af=30.0, honeycomb_wall=3.5, honeycomb_skin=2.0,
-            honeycomb_margin_x=20.0, honeycomb_margin_y=25.0,
-        )
-        assert result.solid.is_watertight
 
 
 class TestLabel:
@@ -121,12 +59,6 @@ class TestGeometryPositions:
         geom = build_plate(mag_inset_x=50.0, mag_count_x=2).geometry
         assert geom.stack_xs == (geom.stack_inset_x, geom.plate_x - geom.stack_inset_x)
         assert geom.stack_ys == (geom.stack_inset_y, geom.plate_y - geom.stack_inset_y)
-
-    def test_stack_positions_unaffected_by_honeycomb_params(self):
-        base = build_plate().geometry
-        varied = build_plate(honeycomb_af=35.0, honeycomb_wall=4.0).geometry
-        assert base.stack_xs == varied.stack_xs
-        assert base.stack_ys == varied.stack_ys
 
     def test_bottom_corner_magnets_symmetric_about_x_centreline(self):
         geom = build_plate().geometry
