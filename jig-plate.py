@@ -87,6 +87,36 @@ Changelog
          precision.
   2.3.0  minor release folding 2.2.1. Branding now duplicated on both
          side faces, each mirrored to read correctly from its own side.
+  2.3.1  bottom-face honeycomb lightening cutout added to build_plate()
+         (new honeycomb_enabled/honeycomb_skin/honeycomb_wall/
+         honeycomb_af/honeycomb_margin_x/honeycomb_margin_y params,
+         default honeycomb_enabled=True) -- a hex grid of blind pockets
+         cut up from the bottom face, sized to match eu-business-card-jig's
+         vented pocket floor (23.1 mm across flats, 2.6 mm walls), leaving
+         a 2.4 mm top skin. Boundary cells are clipped via boolean
+         intersection against the margin field and boolean difference
+         against the bottom-corner mounting bores and corner stacking
+         rib/groove footprints, rather than dropped whole. Default plate
+         volume drops 481.5 -> 282.0 cm3 (-41.4%); top face, all magnet
+         bores, and the stacking rib/groove/coupon are untouched. Verified
+         still watertight.
+  2.3.2  new --honeycomb-af CLI flag exposes build_plate()'s honeycomb_af
+         parameter (cell size, mm across flats), default unchanged at
+         23.1. Default plate output unaffected; verified still watertight
+         at the default and at a sample override (--honeycomb-af 30).
+  2.3.3  default honeycomb_af 23.1 -> 22.0 mm (across flats), and the
+         --honeycomb-af CLI default follows. Default plate volume
+         282.0 -> 285.5 cm3 (-41.4% -> -40.7% vs the solid baseline --
+         smaller cells leave proportionally more wall material). Top
+         face, all magnet bores, and the stacking rib/groove/coupon are
+         untouched. Verified still watertight.
+  2.4.0  minor release folding 2.3.1-2.3.3. Bottom-face honeycomb
+         lightening cutout (22 mm cells across flats, 2.6 mm walls,
+         boundary cells clipped rather than dropped) with cell size
+         exposed via --honeycomb-af. Default plate volume
+         481.5 -> 285.5 cm3 (-40.7%); top face, all magnet bores, and the
+         stacking rib/groove/coupon are untouched. Verified still
+         watertight.
 """
 import argparse
 from pathlib import Path
@@ -100,7 +130,7 @@ from matplotlib.patches import FancyBboxPatch
 
 from jig_plate_base import build_plate, bx
 
-VERSION = "2.3.0"
+VERSION = "2.4.0"
 OUT_DIR = Path(__file__).resolve().parent / "output"
 
 
@@ -629,9 +659,14 @@ def main():
              'mark (the logo itself is not parameterized). '
              'Default: "Jig Plate".',
     )
+    parser.add_argument(
+        "--honeycomb-af", type=float, default=22.0,
+        help="Honeycomb lightening-cutout cell size, in mm across flats. "
+             "Default: 22.0.",
+    )
     args = parser.parse_args()
 
-    result = build_plate(label=args.label)
+    result = build_plate(label=args.label, honeycomb_af=args.honeycomb_af)
     solid = result.solid
     geom = result.geometry
 

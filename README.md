@@ -23,6 +23,10 @@ below.
   back faces, symmetric about the centreline so plates mate either way round
 - **4 more magnet bores** (same Ø6.1 mm / 6 × 3 mm spec) in the bottom-face
   corners, for mounting the plate itself
+- **Honeycomb lightening cutout** in the bottom face — a hex grid of blind
+  pockets (22 mm across flats, 2.6 mm walls) leaving a 2.4 mm top skin,
+  clipped at the margin field and around every magnet bore and stacking
+  rib/groove rather than just avoided, cutting plate volume by ~41%
 - **Debossed branding** — logo mark plus a text label (default "Jig Plate",
   override with `--label`) recessed into the top face's front frame edge,
   duplicated on the left and right faces (each mirrored to read correctly
