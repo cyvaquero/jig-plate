@@ -175,6 +175,42 @@ Changelog
          slab); top face, all magnet bores, and the stacking
          rib/groove/coupon were already untouched by the removed cutout
          and remain so. Verified still watertight.
+  2.4.6  four fixes from independent code review:
+         (1) build_plate() now raises ValueError for an empty or
+         whitespace-only label instead of crashing deep in matplotlib
+         with an unrelated AttributeError.
+         (2) the magnet-bore detail drawing no longer hatches 2 mm of air
+         in front of the plate's front face -- the material region now
+         starts exactly at the face (y=0); the dashed centreline leader
+         still extends slightly past it for visual clarity, unchanged.
+         (3) the corner stacking groove was 1.6 mm deep, not the
+         documented/labelled 1.5 mm -- a stray +0.1 mm overcut at the top
+         of the cut (left over from the punch-through-cut pattern used
+         elsewhere, not needed for this interior blind pocket) is
+         removed. Verified via ray-cast measurement on the mesh, not just
+         the cut coordinates. Default plate volume shifts by a
+         negligible ~4.2 mm3 (four corners x 0.1 mm x groove footprint);
+         unchanged at 481.5 cm3 display precision.
+         (4) the magnet-bore-to-stacking-groove wall is 1.85 mm (correct
+         since the 2.1.3 groove-play change), but three comments
+         (README.md, jig_plate_base.py, jig-plate.py) still said 1.95 mm
+         -- corrected to match the actual, verified-on-the-mesh value.
+         Historical changelog entries describing 1.95 mm as true *at
+         that point in the design's history* are untouched.
+         Also: rewrote several tests that could never fail regardless of
+         the actual geometry (algebraic self-identities, or comparing a
+         field against a formula built from that same object's other
+         passthrough fields) into real checks against literal expected
+         values and, where the point is to verify a cavity or solid
+         region actually exists, `Trimesh.contains()`/ray-cast checks
+         against the mesh itself. Fixed the bottom-magnet symmetry and
+         stack-position tests, the always-true plate_x<=246 check
+         (folded into the bounding-box test, which does check the
+         mesh), and the magnet-count symmetry test that would have
+         wrongly failed for an odd mag_count_x (parametrized over
+         2-5 to prove it now doesn't). New rtree dependency (added to
+         requirements.txt) for the ray-cast/contains() tests. Verified
+         still watertight; 25/25 tests pass.
 """
 import argparse
 from pathlib import Path
@@ -188,7 +224,7 @@ from matplotlib.patches import FancyBboxPatch
 
 from jig_plate_base import build_plate, bx
 
-VERSION = "2.4.5"
+VERSION = "2.4.6"
 OUT_DIR = Path(__file__).resolve().parent / "output"
 
 
@@ -573,20 +609,21 @@ def _tech_detail(out_path, geom):
     ax1.set_facecolor(BG)
 
     S1 = 45.0
-    plate_y0_m = -2.0
+    mat_y0 = 0.0  # front/back face -- material starts here, never before it
+    leader_y0 = -2.0  # dashed centerline only, extends past the face for clarity
     plate_y1_m = geom.mag_depth + 8.0
     bore_r = geom.mag_d / 2
     mag_cz = geom.plate_z / 2
 
     plate_verts = [
-        (plate_y0_m, 0), (plate_y1_m, 0),
-        (plate_y1_m, geom.plate_z), (plate_y0_m, geom.plate_z),
+        (mat_y0, 0), (plate_y1_m, 0),
+        (plate_y1_m, geom.plate_z), (mat_y0, geom.plate_z),
     ]
     ax1.add_patch(MplPoly([(y * S1, z * S1) for y, z in plate_verts],
                   fc=SHAPE, alpha=0.10, ec=FG, lw=CUT_LW, zorder=2))
-    _hatch_rect(ax1, plate_y0_m * S1, 0, plate_y1_m * S1,
+    _hatch_rect(ax1, mat_y0 * S1, 0, plate_y1_m * S1,
                 (mag_cz - bore_r) * S1, spacing=4.5)
-    _hatch_rect(ax1, plate_y0_m * S1, (mag_cz + bore_r) * S1,
+    _hatch_rect(ax1, mat_y0 * S1, (mag_cz + bore_r) * S1,
                 plate_y1_m * S1, geom.plate_z * S1, spacing=4.5)
     _hatch_rect(ax1, geom.mag_depth * S1, (mag_cz - bore_r) * S1,
                 plate_y1_m * S1, (mag_cz + bore_r) * S1, spacing=4.5)
@@ -613,7 +650,7 @@ def _tech_detail(out_path, geom):
 
     ax1.plot([0, 0], [-1 * S1, (geom.plate_z + 1) * S1],
              color=FG, lw=CUT_LW, zorder=3)
-    ax1.plot([plate_y0_m * S1, plate_y1_m * S1],
+    ax1.plot([leader_y0 * S1, plate_y1_m * S1],
              [mag_cz * S1, mag_cz * S1],
              color=DIM_COLOR, lw=0.4, ls=(0, (8, 4)), zorder=2)
 
@@ -748,7 +785,7 @@ def main():
     # test coupon: front-right corner, carrying the stacking rib/groove and
     # its bottom mounting magnet -- for validating the corner stacking fit
     # AND the wall between the magnet bore and the stacking rib/groove
-    # (1.95 mm at the defaults), independently of any pocket layout added
+    # (1.85 mm at the defaults), independently of any pocket layout added
     # later. Print two to mate. The cut region (46 x 20 mm) is sized to
     # fully contain both features at the default stack_inset_x/_y and
     # bottom_mag_inset_x -- if either moves much closer to this corner,

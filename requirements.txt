@@ -4,3 +4,4 @@ manifold3d
 shapely
 matplotlib
 pytest
+rtree
