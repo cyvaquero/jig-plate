@@ -23,8 +23,10 @@ when one is cut. The running record of every iterative change is the `Changelog`
 block in the generator docstring, which is updated on every model change.
 
 Each version's number appears in three places and they are kept in sync: the
-generator filename, the mesh filenames, and the 80-byte binary STL header of
-each mesh (readable with `head -c 80 file.stl`).
+`VERSION` constant in `jig-plate.py` (also mirrored in `pyproject.toml`),
+the mesh filenames, and the 80-byte binary STL header of each mesh (readable
+with `head -c 80 file.stl`). The generator's own filename (`jig-plate.py`)
+never changes -- it isn't one of the three.
 
 ---
 

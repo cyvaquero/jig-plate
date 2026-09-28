@@ -72,7 +72,7 @@ do not add iterative entries there; they are folded into the next minor release.
 ## Git
 
 git-flow: work on `develop`, releases via `release/x.y.z` merged to `main` and
-tagged `x.y.z`, then merged back to `develop`.
+tagged `vx.y.z`, then merged back to `develop`.
 
 ## Drawings
 
@@ -92,7 +92,7 @@ changelog entry.
   about the X centreline so plates mate either way round.
 - Plate must stay <= 246 mm in X (bed width plus purge-area clearance).
 - Corner stacking ribs (top face) and grooves (bottom face) are positioned
-  off `PLATE_X`/`PLATE_Y` only, never off pocket or blank layout, so any two
+  off `plate_x`/`plate_y` only, never off pocket or blank layout, so any two
   plates sharing this outer footprint stack together regardless of what
   pockets get added to each later.
 - Nothing in this script may depend on a specific blank's dimensions. If a

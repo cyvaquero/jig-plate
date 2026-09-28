@@ -36,9 +36,9 @@ class PlateGeometry:
     back_margin: float
     mag_d: float
     mag_depth: float
-    mag_xs: list
+    mag_xs: tuple
     bottom_mag_inset_x: float
-    bottom_mag_ys: list
+    bottom_mag_ys: tuple
     stack_w: float
     stack_len: float
     stack_h: float
@@ -325,10 +325,10 @@ def build_plate(
             "past the plate's front/back edge"
         )
 
-    mag_xs = [
+    mag_xs = tuple(
         mag_inset_x + i * (plate_x - 2 * mag_inset_x) / (mag_count_x - 1)
         for i in range(mag_count_x)
-    ]
+    )
     if mag_xs[0] - mag_d / 2 < 0 or mag_xs[-1] + mag_d / 2 > plate_x:
         raise ValueError(
             "front/back magnet bores extend past the plate's left/right "
@@ -344,7 +344,7 @@ def build_plate(
                 "plate_x/mag_inset_x"
             )
 
-    bottom_mag_ys = [front_margin / 2, plate_y - back_margin / 2]
+    bottom_mag_ys = (front_margin / 2, plate_y - back_margin / 2)
     stack_xs = (stack_inset_x, plate_x - stack_inset_x)
     stack_ys = (stack_inset_y, plate_y - stack_inset_y)
 

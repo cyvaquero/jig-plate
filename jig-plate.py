@@ -236,8 +236,11 @@ Changelog
          the-edge bug just fixed in the magnet-bore drawing: det_x0
          (jig-plate.py) came out negative at the default stack_inset_x
          (4 mm), hatching ~3 mm of air past the plate's left edge as
-         solid, making the wall read as ~4 mm instead of 1.85 mm. Now
-         clamped to the plate's actual [0, plate_x] extent.
+         solid, making the groove-to-plate-edge clearance read as ~4 mm
+         instead of 0.9 mm (this window's left boundary -- it doesn't
+         reach the magnet-bore-to-groove wall on the right, 1.85 mm,
+         fixed separately in 2.4.8). Now clamped to the plate's actual
+         [0, plate_x] extent.
          (5) a comment called 1.85 mm "the same clearance value already
          used elsewhere in this design" -- true of the old 1.95 mm
          figure, not of 1.85 mm (grepped the whole design; nothing else
@@ -339,6 +342,68 @@ Changelog
          (expects unflipped X order, since _add_deboss doesn't remap
          axes at all).
          Verified still watertight; 65/65 tests pass.
+  2.4.10 the "still open" items from the fourth review round:
+         (1) PlateGeometry.mag_xs/bottom_mag_ys changed from list to
+         tuple -- the dataclass is frozen, but a list field is still
+         mutable in place, defeating that; matches stack_xs/stack_ys,
+         which were already tuples.
+         (2) stamp() now truncates the header to 80 bytes itself before
+         padding: `.ljust(80, ...)` alone only pads a *short* string,
+         so a header >= 80 bytes was assigned into b[0:80] unchanged,
+         which doesn't truncate either -- it grows the bytearray and
+         shifts every later byte of the binary STL body, silently
+         corrupting the file. Not currently reachable at the default
+         label/version lengths, but no longer a landmine.
+         (3) both STL headers said the plate is 9mm tall; the actual
+         bounding box (with the corner stacking ribs) is 10.5mm -- now
+         computed as plate_z + stack_h, not just plate_z.
+         (4) a ValueError from build_plate() (e.g. a bad --label) used
+         to propagate out of main() as a raw Python traceback; now
+         caught and reported the way argparse reports its own errors
+         (usage line + message, exit code 2, no traceback). The
+         --label help text also named only the top and left faces,
+         omitting the right face branding has carried since 2.2.1.
+         (5) the stack-coupon comment had its risk backwards (said
+         re-check if a feature moves *closer* to the corner, when the
+         46x20mm cut region can only lose a feature if an inset grows
+         *larger*, moving it away from the corner) and didn't mention
+         that the coupon also happens to capture the rightmost front
+         push-fit bore at the default mag_xs, not just the bottom
+         mounting bore. Both corrected.
+         (6) CHANGELOG.md claimed the version appears in the generator
+         filename; jig-plate.py's filename never changes, only the
+         VERSION constant inside it (mirrored in pyproject.toml) does.
+         Corrected to name the actual three places.
+         (7) CLAUDE.md said release tags are `x.y.z`; every tag in this
+         repo is `vx.y.z`. Also still said the stacking rib/groove is
+         positioned off `PLATE_X`/`PLATE_Y` -- stale, pre-dating the
+         2.0.0 two-file split; the current lowercase `plate_x`/
+         `plate_y` parameters are what the code actually uses.
+         (8) drawing fixes (no version-relevant change to the
+         generated mesh, bundled into this release alongside the
+         fixes above): the isometric diagram's projection was
+         mirrored -- iso() reversed the object's own winding, verified
+         by the projected top face's signed area coming out negative
+         (clockwise) where a right-handed view from above must be
+         positive; fixed, and iso_front_face (which only ever drew the
+         back, y=plate_y, face) renamed to iso_back_face. The front
+         elevation never drew the corner stacking ribs at all -- added,
+         since they're visible (not hidden) from that viewing
+         direction. Several patches passed alpha= directly to
+         matplotlib, which dims the edge by the same amount as the
+         fill and made a few section/body outlines nearly invisible at
+         the low alpha values used for fills (0.08-0.16) -- fixed by
+         baking alpha into the facecolor only, added as a `_faint()`
+         helper. "Top face"'s fontweight="semibold" printed a font
+         warning on every run (DejaVu Sans has no semibold weight,
+         matplotlib silently substitutes bold anyway) -- changed to
+         "bold" directly. The stacking-joint detail view now also
+         draws the bottom-corner mounting bore itself and the 1.85mm
+         wall to it (previously stopped just short of the bore, hiding
+         it, and drew that stopping point as if it were a real plate
+         edge -- now drawn as a dashed break when it isn't one).
+         Verified still watertight; 65/65 tests pass (2 updated for
+         the tuple type change).
 """
 import argparse
 from pathlib import Path
@@ -349,22 +414,35 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.patches import FancyBboxPatch
+from matplotlib.colors import to_rgba as _to_rgba
 
 from jig_plate_base import build_plate, bx
 
-VERSION = "2.4.9"
+
+def _faint(color, alpha):
+    """RGBA facecolor with `alpha` baked in -- NOT the same as passing
+    alpha= to a Patch constructor, which dims the edge by the same
+    amount and made several section/body outlines nearly invisible."""
+    return _to_rgba(color, alpha)
+
+VERSION = "2.4.10"
 OUT_DIR = Path(__file__).resolve().parent / "output"
 
 
 # stamp the 80-byte binary STL header so the version travels with the file
 def stamp(path, text):
+    # explicitly truncated to 80 bytes before the pad: `.ljust(80, ...)`
+    # alone only pads a *short* string -- for one already >= 80 bytes it
+    # returns it unchanged, and assigning that into b[0:80] doesn't
+    # truncate either, it grows the bytearray and shifts every byte of
+    # the binary STL body after it, silently corrupting the file.
+    header = text.encode("ascii")[:80].ljust(80, b"\x00")
     b = bytearray(open(path, "rb").read())
-    b[0:80] = text.encode("ascii").ljust(80, b"\x00")
+    b[0:80] = header
     open(path, "wb").write(b)
 
 
 # -------- diagram / technical drawing styling --------
-TEAL = "#1D9E75"
 AMBER = "#BA7517"
 VIOLET = "#7F77DD"
 SHAPE = "#888780"
@@ -376,7 +454,13 @@ C30, S30 = np.cos(np.radians(30)), np.sin(np.radians(30))
 
 
 def iso(x, y, z):
-    return (C30 * (x - y), -S30 * (x + y) + z)
+    # (y - x), not (x - y): the object's own right-handed boundary (top
+    # face traversed 0,0 -> +x,0 -> +x,+y -> 0,+y, the standard CCW
+    # winding for a face whose outward normal is +Z) must still project
+    # as CCW to a viewer above the object, or the whole scene is a
+    # mirror image of the real part -- verified with (x - y) by shoelace
+    # area on the projected top face: it came out negative (CW).
+    return (C30 * (y - x), -S30 * (x + y) + z)
 
 
 def iso_rect(x0, y0, x1, y1, z):
@@ -387,7 +471,7 @@ def iso_right_face(x, y0, y1, z0, z1):
     return [iso(x, y0, z0), iso(x, y1, z0), iso(x, y1, z1), iso(x, y0, z1)]
 
 
-def iso_front_face(x0, x1, y, z0, z1):
+def iso_back_face(x0, x1, y, z0, z1):
     return [iso(x0, y, z0), iso(x1, y, z0), iso(x1, y, z1), iso(x0, y, z1)]
 
 
@@ -426,11 +510,11 @@ def _plate_diagram(out_path, geom):
     px, py, pz = geom.plate_x * S, geom.plate_y * S, geom.plate_z * S * 3
 
     ax.add_patch(MplPoly(iso_rect(0, 0, px, py, pz),
-                 fc=SHAPE, alpha=0.16, ec=FG, lw=0.5, zorder=2))
+                 fc=_faint(SHAPE, 0.16), ec=FG, lw=0.5, zorder=2))
     ax.add_patch(MplPoly(iso_right_face(px, 0, py, 0, pz),
-                 fc=SHAPE, alpha=0.42, ec=FG, lw=0.5, zorder=2))
-    ax.add_patch(MplPoly(iso_front_face(0, px, py, 0, pz),
-                 fc=SHAPE, alpha=0.30, ec=FG, lw=0.5, zorder=2))
+                 fc=_faint(SHAPE, 0.42), ec=FG, lw=0.5, zorder=2))
+    ax.add_patch(MplPoly(iso_back_face(0, px, py, 0, pz),
+                 fc=_faint(SHAPE, 0.30), ec=FG, lw=0.5, zorder=2))
 
     # magnet positions, for reference -- on the back (y=plate_y) face,
     # since that's the one actually rendered as a side wall below (the
@@ -449,7 +533,7 @@ def _plate_diagram(out_path, geom):
 
     top_ctr = iso(px / 2, py / 2, pz)
     ax.text(top_ctr[0], top_ctr[1], "Top face",
-            fontsize=9, fontweight="semibold", color=FG,
+            fontsize=9, fontweight="bold", color=FG,
             ha="center", va="center", zorder=6)
 
     # only the top, right (x=plate_x), and back (y=plate_y) faces are
@@ -460,21 +544,21 @@ def _plate_diagram(out_path, geom):
     # anchored at y=0/x=0, points that project into the same screen area
     # as the visible faces even though they aren't actually on them).
     right_pt = iso(px, py * 0.55, pz * 0.35)
-    leader(ax, right_pt, (right_pt[0] + 80, right_pt[1] + 10),
-           "Right edge (branding, mirrored on the left)", dashed=False)
-
-    back_pt = iso(px * 0.25, py, pz * 0.35)
-    leader(ax, back_pt, (back_pt[0] - 60, back_pt[1] - 60),
-           "Back edge (magnets, mirrored on the front)", ha="right",
+    leader(ax, right_pt, (right_pt[0] - 80, right_pt[1] + 10),
+           "Right edge (branding, mirrored on the left)", ha="right",
            dashed=False)
 
+    back_pt = iso(px * 0.25, py, pz * 0.35)
+    leader(ax, back_pt, (back_pt[0] + 70, back_pt[1] - 55),
+           "Back edge (magnets, mirrored on the front)", dashed=False)
+
     bottom_pt = iso(px / 2, py, 0)
-    leader(ax, bottom_pt, (bottom_pt[0] + 70, bottom_pt[1] - 30),
-           "Bottom — sits on the bed, carries mounting magnets")
+    leader(ax, bottom_pt, (bottom_pt[0] - 90, bottom_pt[1] - 55),
+           "Bottom — sits on the bed, carries mounting magnets", ha="right")
 
     mag_pt = iso(geom.mag_xs[1] * S, py, pz * 0.5)
-    leader(ax, mag_pt, (mag_pt[0] - 30, mag_pt[1] - 55),
-           "Magnet bore", ha="right")
+    leader(ax, mag_pt, (mag_pt[0] + 30, mag_pt[1] + 45),
+           "Magnet bore")
 
     stack_pt = iso(sx0, sy0, pz)
     leader(ax, stack_pt, (stack_pt[0] + 60, stack_pt[1] + 55),
@@ -501,7 +585,6 @@ HATCH_LW = 0.3
 CUT_LW = 1.2
 HIDDEN_LW = 0.5
 HIDDEN_LS = (0, (4, 2))
-SECTION_COLOR = TEAL
 # dimension text interrupts whatever it crosses, as on a real drawing
 _DIM_LABEL_BBOX = dict(facecolor=BG, edgecolor="none", pad=0.15)
 
@@ -698,7 +781,16 @@ def _tech_front_elevation(out_path, geom):
 
     # plate outline (front face: X vs Z, true scale)
     ax.add_patch(plt.Rectangle((0, 0), geom.plate_x * S, geom.plate_z * S,
-                 fc=SHAPE, alpha=0.08, ec=FG, lw=CUT_LW, zorder=3))
+                 fc=_faint(SHAPE, 0.08), ec=FG, lw=CUT_LW, zorder=3))
+
+    # corner stacking ribs -- raised above the top face near each edge;
+    # visible (not hidden) in this view, nothing else stands taller
+    for rib_cx in geom.stack_xs:
+        ax.add_patch(plt.Rectangle(
+            ((rib_cx - geom.stack_len / 2) * S, geom.plate_z * S),
+            geom.stack_len * S, geom.stack_h * S,
+            fc=_faint(AMBER, 0.55), ec=FG, lw=CUT_LW, zorder=4,
+        ))
 
     # magnet bores (front face, true circles)
     for mx in geom.mag_xs:
@@ -706,7 +798,7 @@ def _tech_front_elevation(out_path, geom):
         bore_cy = (geom.plate_z / 2) * S
         bore_r = (geom.mag_d / 2) * S
         ax.add_patch(plt.Circle((bore_cx, bore_cy), bore_r,
-                     fc=VIOLET, alpha=0.15, ec=VIOLET, lw=0.8, zorder=4))
+                     fc=_faint(VIOLET, 0.15), ec=VIOLET, lw=0.8, zorder=4))
         ax.plot(bore_cx, bore_cy, "+", color=VIOLET, ms=4, mew=0.5, zorder=5)
 
     # overall X dimension (above)
@@ -758,7 +850,7 @@ def _tech_detail(out_path, geom):
         (plate_y1_m, geom.plate_z), (mat_y0, geom.plate_z),
     ]
     ax1.add_patch(MplPoly([(y * S1, z * S1) for y, z in plate_verts],
-                  fc=SHAPE, alpha=0.10, ec=FG, lw=CUT_LW, zorder=2))
+                  fc=_faint(SHAPE, 0.10), ec=FG, lw=CUT_LW, zorder=2))
     _hatch_rect(ax1, mat_y0 * S1, 0, plate_y1_m * S1,
                 (mag_cz - bore_r) * S1, spacing=4.5)
     _hatch_rect(ax1, mat_y0 * S1, (mag_cz + bore_r) * S1,
@@ -819,18 +911,20 @@ def _tech_detail(out_path, geom):
     ax2.set_facecolor(BG)
 
     S2 = 22.0
-    # clamped to the plate's real X extent, and short of the bottom-corner
-    # mounting bore's near edge -- the unclamped window ran past the plate
-    # edge on the left (stack_inset_x is only 4 mm at the defaults) and,
-    # on the right, past where that bore actually starts (2 mm past it at
-    # the defaults). This view doesn't draw the bore at all, so either
-    # overrun hatches a cavity (air, or the bore) as if it were solid.
+    # window's left edge is clamped to the plate's real X extent (it ran
+    # past x=0 at the default stack_inset_x=4mm, hatching air as solid).
+    # The right edge now extends past the bottom-corner mounting bore's
+    # far edge, plus a margin, so this view can show the bore and the
+    # magnet-bore-to-groove wall the stack coupon exists to validate --
+    # it used to stop just short of the bore (hiding it) and draw that
+    # stopping point as if it were a real plate edge.
     det_x0 = max(0.0, geom.stack_xs[0] - geom.stack_len / 2 - 4.0)
-    bore_near_x = geom.bottom_mag_inset_x - geom.mag_d / 2
-    det_x1 = min(
-        geom.plate_x, bore_near_x,
-        geom.stack_xs[0] + geom.stack_len / 2 + 4.0,
-    )
+    bore_x = geom.bottom_mag_inset_x
+    det_x1 = min(geom.plate_x, bore_x + geom.mag_d / 2 + 4.0)
+    # whether each boundary is the plate's actual edge (drawn solid) or
+    # just where this window stops (drawn as a break, not a real edge)
+    left_is_real_edge = det_x0 <= 1e-9
+    right_is_real_edge = det_x1 >= geom.plate_x - 1e-9
 
     # this plate's body: bottom face carries the recessed groove, top face
     # carries the raised rib -- both are the same solid, shown together so
@@ -839,9 +933,20 @@ def _tech_detail(out_path, geom):
         (det_x0, 0), (det_x1, 0), (det_x1, geom.plate_z), (det_x0, geom.plate_z),
     ]
     ax2.add_patch(MplPoly([(x * S2, z * S2) for x, z in body_verts],
-                  fc=SHAPE, alpha=0.10, ec=FG, lw=CUT_LW, zorder=2))
+                  fc=_faint(SHAPE, 0.10), ec="none", zorder=2))
     _hatch_rect(ax2, det_x0 * S2, 0, det_x1 * S2, geom.plate_z * S2,
                 spacing=4.0)
+    # top/bottom are always real plate faces (solid); left/right are only
+    # real plate edges when the window is clamped there -- otherwise
+    # they're just where this window stops, drawn as a break so they
+    # don't read as an actual edge of the part
+    ax2.plot([det_x0 * S2, det_x1 * S2], [0, 0], color=FG, lw=CUT_LW, zorder=3)
+    ax2.plot([det_x0 * S2, det_x1 * S2], [geom.plate_z * S2] * 2,
+             color=FG, lw=CUT_LW, zorder=3)
+    for x, is_real in ((det_x0, left_is_real_edge), (det_x1, right_is_real_edge)):
+        style = dict(color=FG, lw=CUT_LW) if is_real else dict(
+            color=MUTED, lw=0.6, ls=(0, (2, 1.5)))
+        ax2.plot([x * S2, x * S2], [0, geom.plate_z * S2], zorder=3, **style)
 
     rib_x0 = geom.stack_xs[0] - geom.stack_len / 2
     rib_x1 = geom.stack_xs[0] + geom.stack_len / 2
@@ -886,6 +991,34 @@ def _tech_detail(out_path, geom):
     _dim_h(ax2, 0, det_x0 * S2, (rib_x0 - play) * S2,
            f"{groove_edge_clearance:.1f}", offset=3 * S2, fontsize=6.5)
 
+    # bottom-corner mounting bore -- sectioned through its own centre, so
+    # the vertical cylinder shows as a mag_d (X) x mag_depth (Z) rectangle
+    # sitting on the bottom face, same convention the magnet-bore-detail
+    # panel (left) uses for the horizontal push-fit bores. This is the
+    # feature the stack coupon actually exists to validate the wall to;
+    # a previous version of this view stopped just short of it (hiding
+    # it) and drew that stopping point as if it were a real plate edge.
+    bore_x0 = bore_x - geom.mag_d / 2
+    bore_x1 = bore_x + geom.mag_d / 2
+    bore_verts = [
+        (bore_x0, 0), (bore_x1, 0),
+        (bore_x1, geom.mag_depth), (bore_x0, geom.mag_depth),
+    ]
+    ax2.add_patch(MplPoly([(x * S2, z * S2) for x, z in bore_verts],
+                  fc=BG, ec=FG, lw=CUT_LW, zorder=4))
+    ax2.text(bore_x * S2, (geom.mag_depth / 2) * S2,
+             "magnet bore\n(bottom face)", fontsize=6, ha="center",
+             va="center", color=MUTED, fontfamily="sans-serif",
+             fontstyle="italic", zorder=5)
+
+    # magnet-bore-to-stacking-groove wall (1.85 mm at the defaults) --
+    # the dimension the stack coupon exists to validate. Placed above
+    # both features (groove and bore) to keep clear of either.
+    wall = bore_x0 - (rib_x1 + play)
+    _wall_dim_z = max(geom.stack_h, geom.mag_depth) + 1.5
+    _dim_h(ax2, 0, (rib_x1 + play) * S2, bore_x0 * S2,
+           f"{wall:.2f}", offset=_wall_dim_z * S2, fontsize=6.5)
+
     ax2.text(0.5, -0.02,
              f"Stacking Joint Detail  |  Scale {S2:.0f}:1",
              transform=ax2.transAxes, fontsize=7, ha="center", va="top",
@@ -906,13 +1039,16 @@ def main():
     )
     parser.add_argument(
         "--label", default="Jig Plate",
-        help='Text debossed on the top and left faces, next to the logo '
-             'mark (the logo itself is not parameterized). '
+        help='Text debossed on the top, left, and right faces, next to '
+             'the logo mark (the logo itself is not parameterized). '
              'Default: "Jig Plate".',
     )
     args = parser.parse_args()
 
-    result = build_plate(label=args.label)
+    try:
+        result = build_plate(label=args.label)
+    except ValueError as e:
+        parser.error(str(e))
     solid = result.solid
     geom = result.geometry
 
@@ -934,18 +1070,23 @@ def main():
     stamp(
         OUT,
         f"Jig plate {VERSION} | "
-        f"{geom.plate_x:.0f}x{geom.plate_y:.0f}x{geom.plate_z:.0f}mm | "
+        f"{geom.plate_x:.0f}x{geom.plate_y:.0f}x{geom.plate_z + geom.stack_h:.1f}mm | "
         f"base plate, no pockets",
     )
 
-    # test coupon: front-right corner, carrying the stacking rib/groove and
-    # its bottom mounting magnet -- for validating the corner stacking fit
-    # AND the wall between the magnet bore and the stacking rib/groove
-    # (1.85 mm at the defaults), independently of any pocket layout added
-    # later. Print two to mate. The cut region (46 x 20 mm) is sized to
-    # fully contain both features at the default stack_inset_x/_y and
-    # bottom_mag_inset_x -- if either moves much closer to this corner,
-    # re-check that both stay fully inside SC_X0/SC_Y1 below.
+    # test coupon: front-right corner, carrying the stacking rib/groove,
+    # its bottom mounting magnet, AND (at the default mag_xs) the
+    # rightmost front push-fit magnet bore, which also falls inside this
+    # corner's cut region -- for validating the corner stacking fit and
+    # the wall between the bottom mounting bore and the stacking
+    # rib/groove (1.85 mm at the defaults), independently of any pocket
+    # layout added later. Print two to mate. The cut region (46 x 20 mm)
+    # is sized to fully contain the rib/groove and the bottom mounting
+    # bore at the default stack_inset_x/_y and bottom_mag_inset_x -- if
+    # either inset grows much *larger* (feature moves farther from this
+    # corner, toward the plate's centre), re-check that both stay fully
+    # inside SC_X0/SC_Y1 below; a smaller inset only pulls a feature
+    # closer to the corner, deeper inside the window, not out of it.
     STACK_COUPON = OUT_DIR / f"jig_plate_{VERSION}_stack_coupon.stl"
     SC_X0, SC_Y0, SC_Y1 = geom.plate_x - 46.0, 0.0, 20.0
     stack_coupon = trimesh.boolean.intersection(
@@ -958,7 +1099,7 @@ def main():
         STACK_COUPON,
         f"Jig plate {VERSION} | "
         f"stack coupon {geom.plate_x - SC_X0:g}x{SC_Y1 - SC_Y0:g}"
-        f"x{geom.plate_z:.0f}mm | corner, magnet+rib wall test",
+        f"x{geom.plate_z + geom.stack_h:.1f}mm | corner, magnet+rib wall test",
     )
     print(
         "stack coupon:",

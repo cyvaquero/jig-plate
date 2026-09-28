@@ -439,7 +439,7 @@ class TestGeometryPositions:
     def test_bottom_corner_magnet_positions_match_expected_values(self):
         geom = build_plate().geometry
         assert geom.bottom_mag_inset_x == 12.0
-        assert geom.bottom_mag_ys == [5.0, 213.0]
+        assert geom.bottom_mag_ys == (5.0, 213.0)
 
 
 class TestPurity:
