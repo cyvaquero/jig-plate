@@ -21,8 +21,7 @@ import dataclasses
 import numpy as np
 import trimesh
 from trimesh.creation import box, extrude_polygon
-from shapely.geometry import Polygon, MultiPolygon, box as shapely_box
-from shapely.ops import unary_union
+from shapely.geometry import Polygon, MultiPolygon
 
 
 @dataclasses.dataclass(frozen=True)
@@ -37,9 +36,9 @@ class PlateGeometry:
     back_margin: float
     mag_d: float
     mag_depth: float
-    mag_xs: list
+    mag_xs: tuple
     bottom_mag_inset_x: float
-    bottom_mag_ys: list
+    bottom_mag_ys: tuple
     stack_w: float
     stack_len: float
     stack_h: float
@@ -50,12 +49,6 @@ class PlateGeometry:
     stack_ys: tuple
     label: str
     deboss_d: float
-    honeycomb_enabled: bool
-    honeycomb_skin: float
-    honeycomb_wall: float
-    honeycomb_af: float
-    honeycomb_margin_x: float
-    honeycomb_margin_y: float
 
 
 @dataclasses.dataclass(frozen=True)
@@ -88,14 +81,48 @@ def _logo_polys(cx, cy):
     return parts
 
 
-def _text_polys(text, size, x0, y0):
-    """Shapely polygons for extrudable text at (x0, y0) baseline."""
-    from matplotlib.textpath import TextPath as _TP
+def _label_font_properties():
     from matplotlib.font_manager import FontProperties as _FP
     # pinned to the font matplotlib bundles internally (not a system font),
     # so the debossed text is identical on macOS, Windows, and Linux
-    tp = _TP((x0, y0), text, size=size,
-             prop=_FP(family="DejaVu Sans", weight="bold"))
+    return _FP(family="DejaVu Sans", weight="bold")
+
+
+def _unsupported_label_chars(text):
+    """Characters in `text` with no real glyph in the debossed font
+    (DejaVu Sans) -- e.g. CJK or other scripts it doesn't cover, or
+    control characters like a literal newline. Rendering these anyway
+    doesn't fail: the font's .notdef glyph is a visible placeholder box
+    that would get debossed as-is, so the caller should reject them with
+    a clear message instead."""
+    import matplotlib.ft2font as _ft2font
+    from matplotlib.font_manager import findfont as _findfont
+    font = _ft2font.FT2Font(_findfont(_label_font_properties()))
+    seen = {}
+    for ch in text:
+        if ch not in seen:
+            seen[ch] = font.get_char_index(ord(ch)) == 0
+    return [ch for ch in dict.fromkeys(text) if seen[ch]]
+
+
+def _text_polys(text, size, x0, y0):
+    """Shapely polygons for extrudable text at (x0, y0) baseline."""
+    from matplotlib.textpath import text_to_path as _t2p
+    from matplotlib.path import Path as _Path
+    from matplotlib.transforms import Affine2D as _Affine2D
+    # ismath=False always: TextPath's default auto-detects mathtext from
+    # a balanced pair of $ in the string, which turned "Save $5 and $6"
+    # into LaTeX-formatted "Save 5and6" and made a lone "$\foo$" crash as
+    # invalid mathtext syntax. This label is debossed plate branding, not
+    # a formula, so every character (including $ and \) always renders
+    # as its own literal DejaVu Sans glyph.
+    verts, codes = _t2p.get_text_path(
+        _label_font_properties(), text, ismath=False
+    )
+    if len(verts) == 0:
+        return []
+    tr = _Affine2D().scale(size / _t2p.FONT_SCALE).translate(x0, y0)
+    tp = _Path(tr.transform(verts), codes)
     raw = tp.to_polygons()
     polys = []
     for v in raw:
@@ -180,88 +207,6 @@ def _add_deboss_right(poly_list, target, plate_x, plate_y, deboss_d):
             target.append(m)
 
 
-def _hex_field_polys(x0, x1, y0, y1, af, wall):
-    """Full-coverage pointy-top hex lattice (cell holes only -- the rib is
-    the gap left between adjacent holes by the pitch, same construction as
-    eu-business-card-jig's vented pocket floor), covering at least the
-    [x0, x1] x [y0, y1] rectangle so it can be clipped to it afterward."""
-    Rh = af / np.sqrt(3.0)  # hole circumradius
-    Rc = (af + wall) / np.sqrt(3.0)  # cell (hole + rib) circumradius
-    col_p = af + wall
-    row_p = 1.5 * Rc
-    base = [
-        (Rh * np.cos(np.radians(90 + 60 * k)), Rh * np.sin(np.radians(90 + 60 * k)))
-        for k in range(6)
-    ]
-
-    polys = []
-    r = 0
-    cy = y0 - Rh
-    while cy <= y1 + Rh + 1e-9:
-        cx = x0 - af / 2 + (col_p / 2 if r % 2 else 0.0)
-        while cx <= x1 + af / 2 + 1e-9:
-            polys.append(Polygon([(cx + vx, cy + vy) for vx, vy in base]))
-            cx += col_p
-        cy += row_p
-        r += 1
-    return polys
-
-
-def _honeycomb_cuts(
-    plate_x, plate_y, plate_z,
-    honeycomb_skin, honeycomb_wall, honeycomb_af,
-    honeycomb_margin_x, honeycomb_margin_y,
-    bottom_mag_inset_x, bottom_mag_ys, mag_d,
-    stack_xs, stack_ys, stack_w, stack_len,
-):
-    """Bottom-face honeycomb lightening cutout: a hex grid of blind pockets
-    cut up from z=0, leaving a thin skin at the top and a honeycomb wall
-    between pockets.
-
-    Built as a full lattice then clipped to the margin-inset field with a
-    boolean intersection, so boundary cells are cut short rather than
-    dropped whole -- same approach eu-business-card-jig uses for its
-    vented pocket floor. The clipped field is then subtracted from the
-    bottom-corner mount-bore and corner-stack-rib/groove footprints (with
-    clearance) so a cell reaching into either gets clipped there too,
-    instead of relying on the margins alone to keep clear. Any sliver left
-    over from either clip that's too small to print cleanly is dropped.
-    """
-    cuts = []
-    x0, x1 = honeycomb_margin_x, plate_x - honeycomb_margin_x
-    y0, y1 = honeycomb_margin_y, plate_y - honeycomb_margin_y
-    if x1 <= x0 or y1 <= y0:
-        return cuts
-
-    pocket_top_z = plate_z - honeycomb_skin  # cut from the bottom up to here
-
-    field = unary_union(_hex_field_polys(x0, x1, y0, y1, honeycomb_af, honeycomb_wall))
-    field = field.intersection(shapely_box(x0, y0, x1, y1))
-
-    excl = []
-    mag_r = mag_d / 2 + 2.0
-    for mx in (bottom_mag_inset_x, plate_x - bottom_mag_inset_x):
-        for my in bottom_mag_ys:
-            excl.append(shapely_box(mx - mag_r, my - mag_r, mx + mag_r, my + mag_r))
-    stack_clear = 2.0
-    for sx in stack_xs:
-        for sy in stack_ys:
-            excl.append(shapely_box(
-                sx - stack_len / 2 - stack_clear, sy - stack_w / 2 - stack_clear,
-                sx + stack_len / 2 + stack_clear, sy + stack_w / 2 + stack_clear,
-            ))
-    if excl:
-        field = field.difference(unary_union(excl))
-
-    min_sliver_area = 3.0  # drop fragments too small to print cleanly
-    geoms = list(field.geoms) if hasattr(field, "geoms") else [field]
-    for g in geoms:
-        if not isinstance(g, Polygon) or g.is_empty or g.area < min_sliver_area:
-            continue
-        cuts.append(extrude_polygon(g, height=pocket_top_z))
-    return cuts
-
-
 def build_plate(
     *,
     plate_x=246.0, plate_y=218.0, plate_z=9.0,
@@ -271,8 +216,6 @@ def build_plate(
     stack_w=1.5, stack_len=6.0, stack_h=1.5, stack_play=0.2,
     stack_inset_x=4.0, stack_inset_y=4.0,
     label="Jig Plate", deboss_d=0.3,
-    honeycomb_enabled=True, honeycomb_skin=2.4, honeycomb_wall=2.6,
-    honeycomb_af=22.0, honeycomb_margin_x=16.0, honeycomb_margin_y=22.0,
 ):
     """Build the jig plate base solid.
 
@@ -283,31 +226,311 @@ def build_plate(
     zones are so pockets can avoid them.
 
     `build_plate()` with no arguments reproduces the current default plate
-    exactly -- see CHANGELOG.md for what the defaults are and why.
+    exactly -- see the `Changelog` block in jig-plate.py's module docstring
+    for what the defaults are and why (the day-to-day, up-to-date record;
+    CHANGELOG.md only records major/minor releases, and its most recent
+    entry describes a feature since removed -- see its own top-of-file note).
 
-    A honeycomb lightening cutout is cut up from the bottom face by
-    default (`honeycomb_enabled=True`): a thin `honeycomb_skin`-thick top
-    skin left uncut, with a hex grid of pockets (`honeycomb_af` mm across
-    flats, same sizing convention as eu-business-card-jig's vented pocket
-    floor) separated by `honeycomb_wall`-wide walls, inset
-    `honeycomb_margin_x`/`honeycomb_margin_y` from the plate edges. Unlike
-    a drop-if-it-doesn't-fit grid, the lattice is clipped to the margin
-    field and to the bottom-corner mounting magnet bores/corner stacking
-    rib-groove footprints (with clearance) via boolean intersection and
-    difference, so boundary cells are cut short rather than omitted -- see
-    `_honeycomb_cuts`. Pass `honeycomb_enabled=False` for a solid
-    underside.
+    `stack_play` gives the rib/groove fit clearance on all three axes, but
+    not symmetrically: X and Y split it in half, `stack_play / 2` per side,
+    since the rib can land off-centre in the groove either way; Z applies
+    it in full, since the groove only has one closed side -- its floor --
+    for the rib to bottom out against, while the other "side" is the open
+    mouth at the plate's bottom face, which needs no clearance of its own.
 
     Returns a `PlateResult` (`.solid`: trimesh.Trimesh, `.geometry`:
     PlateGeometry). Pure -- no file I/O, no argv, no printing.
     """
-    mag_xs = [
+    # ---- input validation -----------------------------------------
+    # Type/finiteness/sign checks first (a bad type or a nonsensical
+    # negative/zero size fails fast, with its own clear message, rather
+    # than surfacing as a collision against something else below).
+    if not isinstance(label, str):
+        raise ValueError(f"label must be a str, got {type(label).__name__}")
+    if not label.strip():
+        raise ValueError("label must not be empty or whitespace-only")
+    _bad_chars = _unsupported_label_chars(label)
+    if _bad_chars:
+        raise ValueError(
+            f"label {label!r} contains characters with no glyph in the "
+            f"debossed font (DejaVu Sans), which would deboss as visible "
+            f"placeholder boxes instead: {_bad_chars!r}"
+        )
+
+    for _name, _value in (
+        ("plate_x", plate_x), ("plate_y", plate_y), ("plate_z", plate_z),
+        ("mag_d", mag_d), ("mag_depth", mag_depth),
+        ("mag_inset_x", mag_inset_x),
+        ("bottom_mag_inset_x", bottom_mag_inset_x),
+        ("front_margin", front_margin), ("back_margin", back_margin),
+        ("stack_w", stack_w), ("stack_len", stack_len),
+        ("stack_h", stack_h), ("stack_play", stack_play),
+        ("stack_inset_x", stack_inset_x), ("stack_inset_y", stack_inset_y),
+        ("deboss_d", deboss_d),
+    ):
+        if isinstance(_value, bool) or not isinstance(_value, (int, float)):
+            raise ValueError(f"{_name} must be a number, got {_value!r}")
+        if not np.isfinite(_value):
+            raise ValueError(f"{_name} must be finite, got {_value!r}")
+    if isinstance(mag_count_x, bool) or not isinstance(mag_count_x, int):
+        raise ValueError(f"mag_count_x must be an int, got {mag_count_x!r}")
+
+    if plate_x <= 0 or plate_y <= 0 or plate_z <= 0:
+        raise ValueError(
+            f"plate_x/plate_y/plate_z must be positive, got "
+            f"({plate_x}, {plate_y}, {plate_z})"
+        )
+    # every dimension that sizes an actual cut/mark feature must be
+    # strictly positive, or that feature silently vanishes (mag_depth=0
+    # cuts no bore at all, stack_h=0 leaves no rib, deboss_d=0 debosses
+    # nothing) rather than failing -- caught here, not by the collision
+    # check below, since a zero-size feature never overlaps anything.
+    for _name, _value in (
+        ("mag_d", mag_d), ("mag_depth", mag_depth),
+        ("stack_w", stack_w), ("stack_len", stack_len),
+        ("stack_h", stack_h), ("deboss_d", deboss_d),
+    ):
+        if _value <= 0:
+            raise ValueError(f"{_name} must be positive, got {_value}")
+    if front_margin < 0 or back_margin < 0:
+        raise ValueError(
+            f"front_margin/back_margin must be >= 0, got "
+            f"({front_margin}, {back_margin})"
+        )
+    if mag_count_x < 2:
+        raise ValueError(
+            f"mag_count_x ({mag_count_x}) must be >= 2 -- the bore-spacing "
+            "formula divides by (mag_count_x - 1)"
+        )
+    if stack_play < 0:
+        raise ValueError(
+            f"stack_play ({stack_play}) must be >= 0, or the groove is cut "
+            "narrower and shallower than the rib it has to receive -- two "
+            "plates couldn't stack"
+        )
+    if plate_x > 246.0:
+        raise ValueError(
+            f"plate_x ({plate_x}) exceeds 246 mm (bed width + purge-area "
+            "clearance -- see CLAUDE.md)"
+        )
+
+    mag_xs = tuple(
         mag_inset_x + i * (plate_x - 2 * mag_inset_x) / (mag_count_x - 1)
         for i in range(mag_count_x)
-    ]
-    bottom_mag_ys = [front_margin / 2, plate_y - back_margin / 2]
+    )
+    bottom_mag_ys = (front_margin / 2, plate_y - back_margin / 2)
     stack_xs = (stack_inset_x, plate_x - stack_inset_x)
     stack_ys = (stack_inset_y, plate_y - stack_inset_y)
+
+    # ---- debossed branding footprint (computed before the geometry
+    # check below, so the logo+label cuts can be validated the same way
+    # as every mechanical feature -- a long label at a shallow deboss_d
+    # can reach sideways into a magnet bore, and deboss_d alone (with no
+    # upper limit) can cut the top-face branding all the way through the
+    # plate; neither was checked before) ----
+    _front_cy = front_margin / 2
+
+    _tp0 = _text_polys(label, 4.0, 0, 0)
+    if not _tp0:
+        raise ValueError(
+            f"label {label!r} produces no renderable glyphs in the "
+            "debossed font (DejaVu Sans) -- e.g. zero-width characters "
+            "that pass a whitespace check but still render nothing"
+        )
+    _tb = [p.bounds for p in _tp0]
+    _tw = max(b[2] for b in _tb) - min(b[0] for b in _tb)
+    _tx0 = min(b[0] for b in _tb)
+    _lw = 6.0
+    _total = _lw + 3.0 + _tw
+    _sx = (plate_x - _total) / 2
+    _sx_left = (plate_y - _total) / 2
+
+    if _total > plate_y or _total > plate_x:
+        raise ValueError(
+            f"branding (logo + label {label!r}) is {_total:.1f} mm wide, "
+            f"wider than plate_y ({plate_y}) or plate_x ({plate_x}) -- "
+            "shorten the label or enlarge the plate"
+        )
+
+    # each face's actual logo+text polygons, computed once and reused
+    # both for the geometry check below and for the real cuts later --
+    # not recomputed, so what's validated is exactly what's cut.
+    _top_logo = _logo_polys(_sx + _lw / 2, _front_cy + 0.4)
+    _top_text = _text_polys(label, 4.0, _sx + _lw + 3.0 - _tx0, _front_cy - 2.0)
+    _top_all = _top_logo + _top_text
+    _top_x0 = min(p.bounds[0] for p in _top_all)
+    _top_x1 = max(p.bounds[2] for p in _top_all)
+    _top_y0 = min(p.bounds[1] for p in _top_all)
+    _top_y1 = max(p.bounds[3] for p in _top_all)
+
+    # left/right faces deboss the *same* logo+text polygons (see
+    # _add_deboss_left/_add_deboss_right below) through different
+    # transforms, so only one pair needs computing.
+    _side_logo = _logo_polys(_sx_left + _lw / 2, plate_z / 2 + 0.4)
+    _side_text = _text_polys(
+        label, 4.0, _sx_left + _lw + 3.0 - _tx0, plate_z / 2 - 2.0
+    )
+    _side_all = _side_logo + _side_text
+    _side_x0 = min(p.bounds[0] for p in _side_all)  # -> world Y
+    _side_x1 = max(p.bounds[2] for p in _side_all)
+    _side_z0 = min(p.bounds[1] for p in _side_all)  # -> world Z directly
+    _side_z1 = max(p.bounds[3] for p in _side_all)
+
+    if _side_z0 < 0 or _side_z1 > plate_z:
+        raise ValueError(
+            f"side-face branding (logo + label {label!r}) spans Z "
+            f"[{_side_z0:.2f}, {_side_z1:.2f}] mm, which doesn't "
+            f"fit within the plate's thickness [0, {plate_z}] -- increase "
+            "plate_z"
+        )
+
+    # Every mechanical feature (magnet bores, stacking rib/groove,
+    # debossed branding) as an axis-aligned bounding box, checked for
+    # (a) staying within the plate's own bounds -- with at least
+    # _min_wall of material left, not just non-negative -- on every axis
+    # where it isn't deliberately supposed to reach or cross one (a
+    # blind bore's mouth sits exactly at the face it's drilled from; the
+    # rib deliberately stands proud above the top face), and (b) not
+    # coming within _min_wall of any other feature. Bounding boxes
+    # around the round bores (and the irregular debossed glyph shapes)
+    # are a conservative approximation -- it can reject a few diagonal
+    # near-misses that would actually clear, but it can never miss a
+    # real collision, which is the property that matters here. This one
+    # mechanism is what catches every reported "still builds a broken/
+    # overlapping/paper-thin-walled plate" case, independent of *which*
+    # parameter combination causes it, so a new one doesn't need a new
+    # bespoke check.
+    # `touch` names which of this feature's own boundaries is deliberately
+    # anchored flush to a plate face (a blind bore's mouth, at the face
+    # it's drilled from; the branding's cut depth, at the face it's
+    # debossed into) -- equality is fine there, no _min_wall required.
+    # Every other boundary must keep _min_wall clear of the far face, or
+    # the cut leaves less material there than can reliably print, which
+    # is just as broken as overshooting it outright.
+    _min_wall = 0.8  # ~2 perimeters at a common 0.4mm nozzle
+    _features = []  # (name, (x0,y0,z0,x1,y1,z1), bounds_or_None, touch_set)
+    _plate_bounds = (0.0, 0.0, 0.0, plate_x, plate_y, plate_z)
+    for _mx in mag_xs:
+        _features.append((
+            f"front push-fit bore @x={_mx:.2f}",
+            (_mx - mag_d / 2, 0.0, plate_z / 2 - mag_d / 2,
+             _mx + mag_d / 2, mag_depth, plate_z / 2 + mag_d / 2),
+            _plate_bounds, {"y_min"},
+        ))
+        _features.append((
+            f"back push-fit bore @x={_mx:.2f}",
+            (_mx - mag_d / 2, plate_y - mag_depth, plate_z / 2 - mag_d / 2,
+             _mx + mag_d / 2, plate_y, plate_z / 2 + mag_d / 2),
+            _plate_bounds, {"y_max"},
+        ))
+    for _mx in (bottom_mag_inset_x, plate_x - bottom_mag_inset_x):
+        for _my in bottom_mag_ys:
+            _features.append((
+                f"bottom-corner mounting bore @({_mx:.2f}, {_my:.2f})",
+                (_mx - mag_d / 2, _my - mag_d / 2, 0.0,
+                 _mx + mag_d / 2, _my + mag_d / 2, mag_depth),
+                _plate_bounds, {"z_min"},
+            ))
+    for _mx in stack_xs:
+        for _my in stack_ys:
+            # the rib stands proud above the top face by design, so its
+            # containment check has no Z-upper-bound
+            _features.append((
+                f"stacking rib @({_mx:.2f}, {_my:.2f})",
+                (_mx - stack_len / 2, _my - stack_w / 2, plate_z,
+                 _mx + stack_len / 2, _my + stack_w / 2, plate_z + stack_h),
+                (0.0, 0.0, 0.0, plate_x, plate_y, None), set(),
+            ))
+            # stack_play splits across X and Y (play/2 per side) since the
+            # rib can land off-centre in the groove on either axis -- but
+            # applies in full to Z, since the groove only has one closed
+            # side (its floor) for the rib to bottom out against; the
+            # other "side" is the open mouth at the plate's bottom face,
+            # which needs no clearance of its own.
+            _features.append((
+                f"stacking groove @({_mx:.2f}, {_my:.2f})",
+                (_mx - (stack_len + stack_play) / 2,
+                 _my - (stack_w + stack_play) / 2, 0.0,
+                 _mx + (stack_len + stack_play) / 2,
+                 _my + (stack_w + stack_play) / 2, stack_h + stack_play),
+                _plate_bounds, {"z_min"},
+            ))
+    _features.append((
+        f"top-face branding (logo + label {label!r})",
+        (_top_x0, _top_y0, plate_z - deboss_d, _top_x1, _top_y1, plate_z),
+        _plate_bounds, {"z_max"},
+    ))
+    _features.append((
+        f"left-face branding (logo + label {label!r})",
+        (0.0, plate_y - _side_x1, _side_z0,
+         deboss_d, plate_y - _side_x0, _side_z1),
+        _plate_bounds, {"x_min"},
+    ))
+    _features.append((
+        f"right-face branding (logo + label {label!r})",
+        (plate_x - deboss_d, _side_x0, _side_z0,
+         plate_x, _side_x1, _side_z1),
+        _plate_bounds, {"x_max"},
+    ))
+
+    _eps = 1e-6  # floating-point noise only, on boundaries allowed to touch
+
+    def _bound_ok(lo, hi, blo, bhi, touch_lo, touch_hi):
+        lo_ok = lo >= blo - _eps if touch_lo else lo >= blo + _min_wall - _eps
+        hi_ok = hi <= bhi + _eps if touch_hi else hi <= bhi - _min_wall + _eps
+        return lo_ok and hi_ok
+
+    for _name, _box, _bounds, _touch in _features:
+        if _bounds is None:
+            continue
+        _x0, _y0, _z0, _x1, _y1, _z1 = _box
+        _bx0, _by0, _bz0, _bx1, _by1, _bz1 = _bounds
+        if not _bound_ok(_x0, _x1, _bx0, _bx1,
+                          "x_min" in _touch, "x_max" in _touch):
+            raise ValueError(
+                f"{_name} extends past the plate's left/right edge, or "
+                f"leaves less than {_min_wall}mm of material there "
+                f"(X {_x0:.2f}..{_x1:.2f}, plate is 0..{_bx1:.2f})"
+            )
+        if not _bound_ok(_y0, _y1, _by0, _by1,
+                          "y_min" in _touch, "y_max" in _touch):
+            raise ValueError(
+                f"{_name} extends past the plate's front/back edge, or "
+                f"leaves less than {_min_wall}mm of material there "
+                f"(Y {_y0:.2f}..{_y1:.2f}, plate is 0..{_by1:.2f})"
+            )
+        if _bz1 is None:
+            if _z0 < _bz0 - _eps if "z_min" in _touch else _z0 < _bz0 + _min_wall:
+                raise ValueError(
+                    f"{_name} extends below the bottom face "
+                    f"(Z min {_z0:.2f})"
+                )
+        elif not _bound_ok(_z0, _z1, _bz0, _bz1,
+                            "z_min" in _touch, "z_max" in _touch):
+            raise ValueError(
+                f"{_name} extends past the top or bottom face, or "
+                f"leaves less than {_min_wall}mm of material there "
+                f"(Z {_z0:.2f}..{_z1:.2f}, plate is 0..{_bz1:.2f})"
+            )
+
+    for _i in range(len(_features)):
+        _name_a, _box_a, _, _ = _features[_i]
+        _ax0, _ay0, _az0, _ax1, _ay1, _az1 = _box_a
+        for _j in range(_i + 1, len(_features)):
+            _name_b, _box_b, _, _ = _features[_j]
+            _bx0, _by0, _bz0, _bx1, _by1, _bz1 = _box_b
+            # per-axis separation (negative = actual overlap on that
+            # axis); if the *best* axis doesn't clear _min_wall, the two
+            # features are too close on every axis simultaneously, i.e.
+            # they either overlap outright or leave too thin a wall.
+            _gap_x = max(_ax0 - _bx1, _bx0 - _ax1)
+            _gap_y = max(_ay0 - _by1, _by0 - _ay1)
+            _gap_z = max(_az0 - _bz1, _bz0 - _az1)
+            if max(_gap_x, _gap_y, _gap_z) < _min_wall - _eps:
+                raise ValueError(
+                    f"{_name_a} comes within {_min_wall}mm of {_name_b} "
+                    "(or overlaps it)"
+                )
 
     cuts, marks, scribes = [], [], []
 
@@ -327,9 +550,8 @@ def build_plate(
             cuts.append(c)
 
     # bottom-face corner mounting magnet bores. Inset kept close to the
-    # corner stacking rib/groove (1.95 mm wall between them in X, the same
-    # clearance value already used elsewhere in this design) rather than
-    # the plate edge, since the rib/groove -- not the edge -- is the
+    # corner stacking rib/groove (1.85 mm wall between them in X) rather
+    # than the plate edge, since the rib/groove -- not the edge -- is the
     # nearest feature at the default stack_inset_x/_y.
     for mx in (bottom_mag_inset_x, plate_x - bottom_mag_inset_x):
         for my in bottom_mag_ys:
@@ -354,56 +576,26 @@ def build_plate(
                     mx + stack_len / 2, my + stack_w / 2, plate_z + stack_h,
                 )
             )
+            # stack_play: half per side in X/Y, full in Z -- see the
+            # matching comment on the groove's feature-check box above.
             scribes.append(
                 bx(
                     mx - (stack_len + stack_play) / 2,
                     my - (stack_w + stack_play) / 2, -0.1,
                     mx + (stack_len + stack_play) / 2,
                     my + (stack_w + stack_play) / 2,
-                    stack_h + 0.1,
+                    stack_h + stack_play,
                 )
             )
 
-    # ---- debossed branding on top face (front frame edge) ----
-    _front_cy = front_margin / 2
-
-    _tp0 = _text_polys(label, 4.0, 0, 0)
-    _tb = [p.bounds for p in _tp0]
-    _tw = max(b[2] for b in _tb) - min(b[0] for b in _tb)
-    _tx0 = min(b[0] for b in _tb)
-    _lw = 6.0
-    _total = _lw + 3.0 + _tw
-    _sx = (plate_x - _total) / 2
-
-    _add_deboss(_logo_polys(_sx + _lw / 2, _front_cy + 0.4), scribes,
-                plate_z, deboss_d)
-    _add_deboss(_text_polys(label, 4.0, _sx + _lw + 3.0 - _tx0, _front_cy - 2.0),
-                scribes, plate_z, deboss_d)
-
-    _sx_left = (plate_y - _total) / 2
-
-    _add_deboss_left(_logo_polys(_sx_left + _lw / 2, plate_z / 2 + 0.4),
-                      scribes, plate_y, deboss_d)
-    _add_deboss_left(
-        _text_polys(label, 4.0, _sx_left + _lw + 3.0 - _tx0, plate_z / 2 - 2.0),
-        scribes, plate_y, deboss_d,
-    )
-
-    _add_deboss_right(_logo_polys(_sx_left + _lw / 2, plate_z / 2 + 0.4),
-                       scribes, plate_x, plate_y, deboss_d)
-    _add_deboss_right(
-        _text_polys(label, 4.0, _sx_left + _lw + 3.0 - _tx0, plate_z / 2 - 2.0),
-        scribes, plate_x, plate_y, deboss_d,
-    )
-
-    if honeycomb_enabled:
-        cuts.extend(_honeycomb_cuts(
-            plate_x, plate_y, plate_z,
-            honeycomb_skin, honeycomb_wall, honeycomb_af,
-            honeycomb_margin_x, honeycomb_margin_y,
-            bottom_mag_inset_x, bottom_mag_ys, mag_d,
-            stack_xs, stack_ys, stack_w, stack_len,
-        ))
+    # ---- debossed branding cuts (top, left, right faces) -- reusing
+    # the exact polygons already validated above, not recomputed ----
+    _add_deboss(_top_logo, scribes, plate_z, deboss_d)
+    _add_deboss(_top_text, scribes, plate_z, deboss_d)
+    _add_deboss_left(_side_logo, scribes, plate_y, deboss_d)
+    _add_deboss_left(_side_text, scribes, plate_y, deboss_d)
+    _add_deboss_right(_side_logo, scribes, plate_x, plate_y, deboss_d)
+    _add_deboss_right(_side_text, scribes, plate_x, plate_y, deboss_d)
 
     plate = bx(0, 0, 0, plate_x, plate_y, plate_z)
     solid = trimesh.boolean.difference([plate] + cuts, engine="manifold")
@@ -420,8 +612,5 @@ def build_plate(
         stack_inset_y=stack_inset_y,
         stack_xs=stack_xs, stack_ys=stack_ys,
         label=label, deboss_d=deboss_d,
-        honeycomb_enabled=honeycomb_enabled, honeycomb_skin=honeycomb_skin,
-        honeycomb_wall=honeycomb_wall, honeycomb_af=honeycomb_af,
-        honeycomb_margin_x=honeycomb_margin_x, honeycomb_margin_y=honeycomb_margin_y,
     )
     return PlateResult(solid=solid, geometry=geometry)

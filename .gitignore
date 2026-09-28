@@ -2,16 +2,15 @@
 #
 
 ## jig-plate Patterns
-/roles/*
 /output/
 /images/
 *.stl
-.venv/
 
 ## Python Patterns
 .venv/
 __pycache__/
 *.pyc
+.pytest_cache/
 
 ## General Blob Patterns
 *.bz2
@@ -22,32 +21,24 @@ __pycache__/
 *.tar
 *.zip
 
-
 ## Linux Patterns
 .directory
 .env
-
 
 ### Vim
 *~
 *.swp
 *.swo
 
-
 ## OSX Patterns
 .DS_Store
-packages
-Play.Tests/IntegrationTestUrl.cs
-
 
 ## Sublime Text Patterns
 *.sublime-project
 *.sublime-workspace
 
-
 ## VS Code Patterns
 *.code-workspace
-
 
 ## Windows Patterns
 
