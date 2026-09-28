@@ -243,6 +243,49 @@ Changelog
          figure, not of 1.85 mm (grepped the whole design; nothing else
          uses it). Removed the false claim.
          Verified still watertight; 26/26 tests pass.
+  2.4.8  fixes from a third round of independent code review:
+         (1) build_plate() now validates its inputs instead of crashing
+         or silently producing broken/nonsensical geometry: plate_x
+         > 246mm (CLAUDE.md's bed/purge-area constraint), mag_count_x
+         < 2 (the bore-spacing formula divides by mag_count_x - 1 --
+         ZeroDivisionError for exactly 1), mag_depth >= plate_z or
+         plate_y/2 (the bottom-corner bore breaks through the top face,
+         or the front/back push-fit bores meet/break through the
+         opposite face -- reproduced and confirmed both), and a label
+         that renders to zero glyphs (e.g. a zero-width character,
+         which passes a whitespace check but still crashes deep in
+         matplotlib with an unrelated AttributeError -- reproduced and
+         confirmed) all now raise a clear ValueError.
+         (2) isometric diagram: the "Front edge"/"Left edge" labels and
+         the reference magnet markers anchored on the hidden y=0/x=0
+         faces, which this view never actually draws (only top,
+         x=plate_x, and y=plate_y are rendered) -- their projected
+         position could visually coincide with the wrong, actually-
+         visible face. Markers moved to the visible back face; labels
+         for the undrawn mirror faces removed and folded into the
+         visible-face labels ("mirrored on the front/left").
+         (3) top-plan view: front/back magnet bores were drawn via
+         ax.plot's `ms` (a fixed marker size in points, unrelated to
+         the drawing's data scale) instead of a data-space Circle like
+         the bottom-face bores correctly use -- rendered far too small,
+         inconsistent with the correctly-sized bottom bores at the same
+         diameter. Fixed to match.
+         (4) stacking-joint detail window ran 2mm past the bottom-corner
+         mounting bore's near edge (undrawn in this view), hatching
+         part of that cavity as solid; clamped short of it. Added a
+         computed (not hardcoded) dimension for the groove-to-plate-edge
+         clearance (0.9mm at the defaults), previously undocumented in
+         this drawing.
+         (5) mesh tests strengthened: groove depth, rib clearance, and
+         the magnet-bore-to-groove wall now checked at all four
+         corners (previously only the front-left one); new tests
+         compare front/back push-fit bore depth and Z-height
+         independently on the mesh (previously only X position was
+         verified); new test verifies the right-face debossed text
+         reads in the correct order (logo before label, matching source
+         order) via a 2D mesh scan, not just the sign-convention
+         reasoning in a comment.
+         Verified still watertight; 38/38 tests pass.
 """
 import argparse
 from pathlib import Path
@@ -256,7 +299,7 @@ from matplotlib.patches import FancyBboxPatch
 
 from jig_plate_base import build_plate, bx
 
-VERSION = "2.4.7"
+VERSION = "2.4.8"
 OUT_DIR = Path(__file__).resolve().parent / "output"
 
 
@@ -336,9 +379,11 @@ def _plate_diagram(out_path, geom):
     ax.add_patch(MplPoly(iso_front_face(0, px, py, 0, pz),
                  fc=SHAPE, alpha=0.30, ec=FG, lw=0.5, zorder=2))
 
-    # magnet positions on the front edge, for reference
+    # magnet positions, for reference -- on the back (y=plate_y) face,
+    # since that's the one actually rendered as a side wall below (the
+    # mirror-image front face at y=0 is never drawn in this view)
     for mx in geom.mag_xs:
-        mag_pt = iso(mx * S, 0, pz * 0.5)
+        mag_pt = iso(mx * S, py, pz * 0.5)
         ax.add_patch(MplCircle(mag_pt, 3.5, fc=VIOLET, alpha=0.6,
                      ec=FG, lw=0.4, zorder=4))
 
@@ -354,27 +399,27 @@ def _plate_diagram(out_path, geom):
             fontsize=9, fontweight="semibold", color=FG,
             ha="center", va="center", zorder=6)
 
-    fr_pt = iso(px * 0.7, 0, pz * 0.5)
-    leader(ax, fr_pt, (fr_pt[0] + 80, fr_pt[1] - 30),
-           "Front edge (magnets)")
-
-    left_pt = iso(0, py * 0.35, pz * 0.7)
-    leader(ax, left_pt, (left_pt[0] - 80, left_pt[1] + 30),
-           "Left edge (branding)", ha="right")
-
+    # only the top, right (x=plate_x), and back (y=plate_y) faces are
+    # actually drawn in this view -- the mirror-image left/front faces
+    # are never rendered, so their labels point at the visible face and
+    # say where the mirrored copy lives instead of anchoring on
+    # undrawn geometry (a past bug: leaders for "Front edge"/"Left edge"
+    # anchored at y=0/x=0, points that project into the same screen area
+    # as the visible faces even though they aren't actually on them).
     right_pt = iso(px, py * 0.55, pz * 0.35)
     leader(ax, right_pt, (right_pt[0] + 80, right_pt[1] + 10),
-           "Right edge (branding)", dashed=False)
+           "Right edge (branding, mirrored on the left)", dashed=False)
 
     back_pt = iso(px * 0.25, py, pz * 0.35)
     leader(ax, back_pt, (back_pt[0] - 60, back_pt[1] - 60),
-           "Back edge (magnets)", ha="right", dashed=False)
+           "Back edge (magnets, mirrored on the front)", ha="right",
+           dashed=False)
 
     bottom_pt = iso(px / 2, py, 0)
     leader(ax, bottom_pt, (bottom_pt[0] + 70, bottom_pt[1] - 30),
            "Bottom — sits on the bed, carries mounting magnets")
 
-    mag_pt = iso(geom.mag_xs[1] * S, 0, pz * 0.5)
+    mag_pt = iso(geom.mag_xs[1] * S, py, pz * 0.5)
     leader(ax, mag_pt, (mag_pt[0] - 30, mag_pt[1] - 55),
            "Magnet bore", ha="right")
 
@@ -514,11 +559,16 @@ def _tech_top_plan(out_path, geom):
     ax.add_patch(plt.Rectangle((0, 0), geom.plate_x * S, geom.plate_y * S,
                  fc="none", ec=FG, lw=CUT_LW, zorder=3))
 
-    # magnet bores (front and back faces)
+    # magnet bores (front and back faces). Circle radius in data
+    # coordinates (not ax.plot's `ms`, which is a fixed marker size in
+    # points, independent of the drawing's S-scale and so the wrong
+    # diameter at any scale other than the one it happened to be tuned
+    # for) -- same approach as the bottom-face bores below, which share
+    # the same mag_d.
     for mx in geom.mag_xs:
         for y_face in [0, geom.plate_y]:
-            ax.plot(mx * S, y_face * S, "o", color=VIOLET,
-                    ms=geom.mag_d * S / 2, mfc="none", mew=1.0, zorder=5)
+            ax.add_patch(plt.Circle((mx * S, y_face * S), geom.mag_d * S / 2,
+                         fc="none", ec=VIOLET, lw=1.0, zorder=5))
             ax.plot(mx * S, y_face * S, "+", color=VIOLET, ms=3, mew=0.6,
                     zorder=5)
 
@@ -713,11 +763,18 @@ def _tech_detail(out_path, geom):
     ax2.set_facecolor(BG)
 
     S2 = 22.0
-    # clamped to the plate's real X extent -- the unclamped window can run
-    # past the edge near this corner (stack_inset_x is only 4 mm at the
-    # defaults) and hatch that overrun as if it were solid material.
+    # clamped to the plate's real X extent, and short of the bottom-corner
+    # mounting bore's near edge -- the unclamped window ran past the plate
+    # edge on the left (stack_inset_x is only 4 mm at the defaults) and,
+    # on the right, past where that bore actually starts (2 mm past it at
+    # the defaults). This view doesn't draw the bore at all, so either
+    # overrun hatches a cavity (air, or the bore) as if it were solid.
     det_x0 = max(0.0, geom.stack_xs[0] - geom.stack_len / 2 - 4.0)
-    det_x1 = min(geom.plate_x, geom.stack_xs[0] + geom.stack_len / 2 + 4.0)
+    bore_near_x = geom.bottom_mag_inset_x - geom.mag_d / 2
+    det_x1 = min(
+        geom.plate_x, bore_near_x,
+        geom.stack_xs[0] + geom.stack_len / 2 + 4.0,
+    )
 
     # this plate's body: bottom face carries the recessed groove, top face
     # carries the raised rib -- both are the same solid, shown together so
@@ -764,6 +821,14 @@ def _tech_detail(out_path, geom):
     _dim_v(ax2, (rib_x0 - play) * S2, 0, geom.stack_h * S2,
            f"{geom.stack_h:.1f} deep", offset=-4 * S2, side="left",
            fontsize=6.5)
+
+    # groove-to-plate-edge clearance (0.9 mm at the defaults) -- computed
+    # from the actual geometry, not a hardcoded figure, so it can't drift
+    # out of sync with stack_inset_x/stack_len/stack_play the way a
+    # comment repeating this number elsewhere could.
+    groove_edge_clearance = (rib_x0 - play) - det_x0
+    _dim_h(ax2, 0, det_x0 * S2, (rib_x0 - play) * S2,
+           f"{groove_edge_clearance:.1f}", offset=3 * S2, fontsize=6.5)
 
     ax2.text(0.5, -0.02,
              f"Stacking Joint Detail  |  Scale {S2:.0f}:1",

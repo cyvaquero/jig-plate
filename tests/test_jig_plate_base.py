@@ -127,13 +127,16 @@ class TestMeshGeometry:
         ]
         assert not any(solid.contains(pts))
 
-    def test_stacking_groove_depth_matches_stack_h(self):
+    @pytest.mark.parametrize("corner_x", [0, 1])
+    @pytest.mark.parametrize("corner_y", [0, 1])
+    def test_stacking_groove_depth_matches_stack_h(self, corner_x, corner_y):
         # the groove is documented as stack_h deep -- verify that exact
         # depth on the mesh via ray casting, not the box coordinates used
         # to cut it (a past bug added a stray 0.1 mm overcut at the top).
+        # Checked at all four corners, not just corner (0, 0).
         result = build_plate()
         g, solid = result.geometry, result.solid
-        origin = [[g.stack_xs[0], g.stack_ys[0], -1.0]]
+        origin = [[g.stack_xs[corner_x], g.stack_ys[corner_y], -1.0]]
         direction = [[0, 0, 1]]
         locs, _, _ = solid.ray.intersects_location(origin, direction)
         first_hit_z = min(locs[:, 2])
@@ -148,35 +151,133 @@ class TestMeshGeometry:
         ]
         assert all(solid.contains(pts))
 
-    def test_nothing_above_the_stacking_rib(self):
+    @pytest.mark.parametrize("corner_x", [0, 1])
+    @pytest.mark.parametrize("corner_y", [0, 1])
+    def test_nothing_above_the_stacking_rib(self, corner_x, corner_y):
         result = build_plate()
         g, solid = result.geometry, result.solid
-        pt = [(g.stack_xs[0], g.stack_ys[0], g.plate_z + g.stack_h + 0.5)]
+        pt = [(g.stack_xs[corner_x], g.stack_ys[corner_y],
+               g.plate_z + g.stack_h + 0.5)]
         assert not solid.contains(pt)[0]
 
-    def test_magnet_bore_to_stack_groove_wall(self):
+    @pytest.mark.parametrize("corner_x", [0, 1])
+    @pytest.mark.parametrize("corner_y", [0, 1])
+    def test_magnet_bore_to_stack_groove_wall(self, corner_x, corner_y):
         # documented at 1.85 mm (README.md, jig_plate_base.py comments).
         # Measured by ray-casting the actual mesh, not by recomputing the
         # wall from PlateGeometry fields (bottom_mag_inset_x, stack_inset_x,
         # etc.) -- those are passthroughs of the *inputs*, so a bug that
         # only shifts the real boolean cut (and not the returned metadata)
-        # would be invisible to an arithmetic-only check like that.
+        # would be invisible to an arithmetic-only check like that. Checked
+        # at all four corners, not just the front-left one.
         result = build_plate()
         g, solid = result.geometry, result.solid
+        stack_x = g.stack_xs[corner_x]
+        stack_y = g.stack_ys[corner_y]
+        bore_x = (
+            g.bottom_mag_inset_x if corner_x == 0
+            else g.plate_x - g.bottom_mag_inset_x
+        )
+        bore_y = g.bottom_mag_ys[corner_y]
         # probe just inside the groove's Y edge nearest the bore -- the
         # narrowest point of the wall, since the bore is a circle whose X
         # extent (at a given Y) widens as Y approaches the bore's own
         # centre, and the groove's Y range doesn't reach that centre.
-        y = g.stack_ys[0] + (g.stack_w + g.stack_play) / 2 - 0.01
+        y_edge = (g.stack_w + g.stack_play) / 2 - 0.01
+        y = stack_y + (y_edge if bore_y > stack_y else -y_edge)
         z = 0.75  # inside both the groove's Z range [0, stack_h] and the
                   # bottom-corner bore's Z range
+        lo_x, hi_x = sorted((stack_x, bore_x))
         origin = [[-1.0, y, z]]
         direction = [[1.0, 0.0, 0.0]]
         locs, _, _ = solid.ray.intersects_location(origin, direction)
         xs = sorted(locs[:, 0])
-        groove_far_edge, bore_near_edge = xs[2], xs[3]
-        wall = bore_near_edge - groove_far_edge
+        wall_near_edge = next(x for x in xs if x > lo_x)
+        wall_far_edge = max(x for x in xs if x < hi_x)
+        wall = wall_far_edge - wall_near_edge
         assert wall == pytest.approx(1.85, abs=0.02)
+
+    def test_front_back_magnet_bore_depth_matches(self):
+        # both push-fit bores are documented as mag_depth deep, drilled
+        # from their own face -- measure each independently on the mesh
+        # (a ray starting outside the plate, at the bore's own face,
+        # travels through open cavity until it first hits solid material
+        # -- that first hit is the blind depth) and compare, rather than
+        # trusting a shared PlateGeometry.mag_depth field that's blind to
+        # a bug in the actual cut.
+        result = build_plate()
+        g, solid = result.geometry, result.solid
+        z = g.plate_z / 2
+        for mx in g.mag_xs:
+            front_locs, _, _ = solid.ray.intersects_location(
+                [[mx, -1.0, z]], [[0.0, 1.0, 0.0]]
+            )
+            back_locs, _, _ = solid.ray.intersects_location(
+                [[mx, g.plate_y + 1.0, z]], [[0.0, -1.0, 0.0]]
+            )
+            front_depth = min(front_locs[:, 1])
+            back_depth = g.plate_y - max(back_locs[:, 1])
+            assert front_depth == pytest.approx(g.mag_depth, abs=1e-3)
+            assert back_depth == pytest.approx(front_depth, abs=1e-3)
+
+    def test_front_back_magnet_bore_height_matches(self):
+        # both push-fit bores should be vertically centred at the same Z
+        # (plate_z / 2) -- measured on the mesh via a vertical ray through
+        # each bore, not read back from geometry fields.
+        result = build_plate()
+        g, solid = result.geometry, result.solid
+        for mx in g.mag_xs:
+            front_locs, _, _ = solid.ray.intersects_location(
+                [[mx, 0.5, -1.0]], [[0.0, 0.0, 1.0]]
+            )
+            back_locs, _, _ = solid.ray.intersects_location(
+                [[mx, g.plate_y - 0.5, -1.0]], [[0.0, 0.0, 1.0]]
+            )
+            front_zs = sorted(front_locs[:, 2])
+            back_zs = sorted(back_locs[:, 2])
+            # crossings: [bottom face, bore bottom, bore top, top face]
+            front_centre = (front_zs[1] + front_zs[2]) / 2
+            back_centre = (back_zs[1] + back_zs[2]) / 2
+            assert front_centre == pytest.approx(g.plate_z / 2, abs=1e-3)
+            assert back_centre == pytest.approx(front_centre, abs=1e-3)
+
+    def test_right_face_text_is_not_reversed(self):
+        # 2.2.1 fixed a bug where the right-face deboss was effectively a
+        # plain copy of the left face's, reading backwards from a viewer
+        # at +X. The logo always lays out before the label text (a 3 mm
+        # gap, local-x order: logo then text -- see build_plate()), and
+        # _add_deboss_right maps local-x directly (unflipped) to world Y,
+        # so on a correctly-oriented right face the logo's debossed
+        # cavity must sit entirely at a lower Y than the text's. Measured
+        # by a 2D grid scan of the actual mesh surface, split into two
+        # clusters at the largest Y gap (the 3 mm layout gap) -- not by
+        # trusting the sign convention documented in a comment.
+        result = build_plate()
+        g, solid = result.geometry, result.solid
+        probe_x = g.plate_x - g.deboss_d / 2
+        y_samples = np.arange(1.0, g.plate_y - 1.0, 0.3)
+        z_samples = np.arange(1.0, g.plate_z - 0.5, 0.3)
+        pts = [(probe_x, y, z) for y in y_samples for z in z_samples]
+        contained = solid.contains(pts)
+        cavity_pts = [p for p, c in zip(pts, contained) if not c]
+        ys = sorted(set(round(p[1], 2) for p in cavity_pts))
+        assert len(ys) > 1, "expected debossed cavities on the right face"
+        gaps = [(ys[i + 1] - ys[i], ys[i], ys[i + 1]) for i in range(len(ys) - 1)]
+        gap_size, gap_lo, gap_hi = max(gaps)
+        assert gap_size == pytest.approx(3.0, abs=1.0), (
+            "expected the ~3mm logo-to-text layout gap to be the largest "
+            "gap in Y among debossed points"
+        )
+        split = (gap_lo + gap_hi) / 2
+        cluster1 = [p for p in cavity_pts if p[1] <= split]
+        cluster2 = [p for p in cavity_pts if p[1] > split]
+        # the logo's dome reaches higher (taller) than any text glyph, so
+        # whichever cluster is taller is the logo -- confirms the split
+        # picked out logo vs. text (not two fragments of the same one).
+        assert max(p[2] for p in cluster1) > max(p[2] for p in cluster2)
+        # the actual check: logo (cluster1) reads before text (cluster2)
+        # in Y, matching the source order -- not reversed.
+        assert max(p[1] for p in cluster1) < min(p[1] for p in cluster2)
 
 
 class TestGeometryPositions:
