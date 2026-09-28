@@ -298,8 +298,8 @@ def build_plate(
     if stack_play < 0:
         raise ValueError(
             f"stack_play ({stack_play}) must be >= 0, or the groove is cut "
-            "narrower than the rib it has to receive -- two plates "
-            "couldn't stack"
+            "narrower and shallower than the rib it has to receive -- two "
+            "plates couldn't stack"
         )
     if plate_x > 246.0:
         raise ValueError(
@@ -439,7 +439,7 @@ def build_plate(
                 (_mx - (stack_len + stack_play) / 2,
                  _my - (stack_w + stack_play) / 2, 0.0,
                  _mx + (stack_len + stack_play) / 2,
-                 _my + (stack_w + stack_play) / 2, stack_h),
+                 _my + (stack_w + stack_play) / 2, stack_h + stack_play),
                 _plate_bounds, {"z_min"},
             ))
     _features.append((
@@ -569,7 +569,7 @@ def build_plate(
                     my - (stack_w + stack_play) / 2, -0.1,
                     mx + (stack_len + stack_play) / 2,
                     my + (stack_w + stack_play) / 2,
-                    stack_h,
+                    stack_h + stack_play,
                 )
             )
 
