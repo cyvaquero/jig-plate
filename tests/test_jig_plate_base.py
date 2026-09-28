@@ -16,7 +16,7 @@ import pytest
 
 from jig_plate_base import build_plate
 
-DEFAULT_VOLUME_MM3 = 481483.0
+DEFAULT_VOLUME_MM3 = 481474.5
 BBOX = (246.0, 218.0, 10.5)
 TOL = 1.0  # mm3, generous enough for boolean-engine tessellation noise
 
@@ -288,18 +288,21 @@ class TestMeshGeometry:
 
     @pytest.mark.parametrize("corner_x", [0, 1])
     @pytest.mark.parametrize("corner_y", [0, 1])
-    def test_stacking_groove_depth_matches_stack_h(self, corner_x, corner_y):
-        # the groove is documented as stack_h deep -- verify that exact
-        # depth on the mesh via ray casting, not the box coordinates used
-        # to cut it (a past bug added a stray 0.1 mm overcut at the top).
-        # Checked at all four corners, not just corner (0, 0).
+    def test_stacking_groove_depth_matches_stack_h_plus_play(self, corner_x, corner_y):
+        # the groove is cut stack_h + stack_play deep -- stack_play mirrors
+        # the rib/groove clearance it already gives in X/Y into Z, so the
+        # rib (stack_h tall) doesn't bottom out in the groove when two
+        # plates stack. Verify that exact depth on the mesh via ray
+        # casting, not the box coordinates used to cut it (a past bug
+        # added a stray 0.1 mm overcut at the top). Checked at all four
+        # corners, not just corner (0, 0).
         result = build_plate()
         g, solid = result.geometry, result.solid
         origin = [[g.stack_xs[corner_x], g.stack_ys[corner_y], -1.0]]
         direction = [[0, 0, 1]]
         locs, _, _ = solid.ray.intersects_location(origin, direction)
         first_hit_z = min(locs[:, 2])
-        assert first_hit_z == pytest.approx(g.stack_h, abs=1e-6)
+        assert first_hit_z == pytest.approx(g.stack_h + g.stack_play, abs=1e-6)
 
     def test_stacking_rib_is_solid_above_the_top_face(self):
         result = build_plate()
@@ -344,8 +347,8 @@ class TestMeshGeometry:
         # centre, and the groove's Y range doesn't reach that centre.
         y_edge = (g.stack_w + g.stack_play) / 2 - 0.01
         y = stack_y + (y_edge if bore_y > stack_y else -y_edge)
-        z = 0.75  # inside both the groove's Z range [0, stack_h] and the
-                  # bottom-corner bore's Z range
+        z = 0.75  # inside both the groove's Z range [0, stack_h + stack_play]
+                  # and the bottom-corner bore's Z range
         lo_x, hi_x = sorted((stack_x, bore_x))
         origin = [[-1.0, y, z]]
         direction = [[1.0, 0.0, 0.0]]

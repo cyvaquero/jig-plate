@@ -526,6 +526,26 @@ Changelog
          started -- no such remote branch exists, and output/images hold
          only current-version files. No action needed.
          Verified still watertight; 86/86 tests pass.
+  2.4.13 stack_play now also opens up the groove's depth (Z), not just
+         its length and width (X/Y, since 2.1.3) -- the groove was cut
+         exactly stack_h deep, the same height as the rib, so the rib
+         would bottom out in the groove with zero vertical clearance
+         between stacked plates even though X/Y already had 0.2mm of
+         play. Groove depth is now stack_h + stack_play (1.7mm at the
+         defaults, rib stays 1.5mm tall); the top-face rib is unchanged.
+         Also updated to match: the stacking-joint detail drawing's
+         groove depth and "deep" dimension label, and the stack_play<0
+         error message (now "narrower and shallower" instead of just
+         "narrower"). Default plate volume 481.483 -> 481.475 cm3 (the
+         four corners' grooves each remove a negligible extra
+         ~0.2mm x groove footprint of material); top face, all magnet
+         bores, and the rib/coupon footprint are otherwise untouched.
+         Verified still watertight; 86/86 tests pass, including a new
+         ray-cast check of the actual groove depth (renamed from
+         test_stacking_groove_depth_matches_stack_h) -- verified via
+         mutation testing that reverting the Z depth to plain stack_h
+         fails exactly that test plus the volume regression test, no
+         others.
 """
 import argparse
 from pathlib import Path
@@ -547,7 +567,7 @@ def _faint(color, alpha):
     amount and made several section/body outlines nearly invisible."""
     return _to_rgba(color, alpha)
 
-VERSION = "2.4.12"
+VERSION = "2.4.13"
 OUT_DIR = Path(__file__).resolve().parent / "output"
 
 
@@ -1107,9 +1127,10 @@ def _tech_detail(out_path, geom):
                   fc=_faint(AMBER, 0.55), ec=FG, lw=CUT_LW, zorder=4))
 
     play = geom.stack_play / 2
+    groove_depth = geom.stack_h + geom.stack_play
     groove_verts = [
         (rib_x0 - play, 0), (rib_x1 + play, 0),
-        (rib_x1 + play, geom.stack_h), (rib_x0 - play, geom.stack_h),
+        (rib_x1 + play, groove_depth), (rib_x0 - play, groove_depth),
     ]
     ax2.add_patch(MplPoly([(x * S2, z * S2) for x, z in groove_verts],
                   fc=BG, ec=FG, lw=CUT_LW, zorder=4))
@@ -1118,7 +1139,7 @@ def _tech_detail(out_path, geom):
              "rib (top face)", fontsize=6.5, ha="center", va="bottom",
              color=AMBER, fontfamily="sans-serif", fontstyle="italic",
              zorder=5)
-    ax2.text(geom.stack_xs[0] * S2, (geom.stack_h / 2) * S2,
+    ax2.text(geom.stack_xs[0] * S2, (groove_depth / 2) * S2,
              "groove\n(bottom face)", fontsize=6, ha="center", va="center",
              color=MUTED, fontfamily="sans-serif", fontstyle="italic",
              zorder=5)
@@ -1128,8 +1149,8 @@ def _tech_detail(out_path, geom):
     _dim_h(ax2, geom.plate_z * S2, rib_x0 * S2, rib_x1 * S2,
            f"{geom.stack_len:.1f}", offset=-2.5 * S2, side="below",
            fontsize=6.5)
-    _dim_v(ax2, (rib_x0 - play) * S2, 0, geom.stack_h * S2,
-           f"{geom.stack_h:.1f} deep", offset=-4 * S2, side="left",
+    _dim_v(ax2, (rib_x0 - play) * S2, 0, groove_depth * S2,
+           f"{groove_depth:.1f} deep", offset=-4 * S2, side="left",
            fontsize=6.5)
 
     # groove-to-plate-edge clearance (0.9 mm at the defaults) -- computed
@@ -1164,7 +1185,7 @@ def _tech_detail(out_path, geom):
     # the dimension the stack coupon exists to validate. Placed above
     # both features (groove and bore) to keep clear of either.
     wall = bore_x0 - (rib_x1 + play)
-    _wall_dim_z = max(geom.stack_h, geom.mag_depth) + 1.5
+    _wall_dim_z = max(groove_depth, geom.mag_depth) + 1.5
     _dim_h(ax2, 0, (rib_x1 + play) * S2, bore_x0 * S2,
            f"{wall:.2f}", offset=_wall_dim_z * S2, fontsize=6.5)
 
