@@ -211,6 +211,38 @@ Changelog
          2-5 to prove it now doesn't). New rtree dependency (added to
          requirements.txt) for the ray-cast/contains() tests. Verified
          still watertight; 25/25 tests pass.
+  2.4.7  five fixes from a second round of independent code review:
+         (1) rtree/pytest were only in requirements.txt, not
+         pyproject.toml or the README's requirements list, so a fresh
+         `pip install -r requirements.txt` in the project's own .venv
+         was the only thing that actually installed them -- 6 of the 25
+         tests failed with ModuleNotFoundError otherwise. Added to both.
+         (2) test_magnet_bore_to_stack_groove_wall computed the wall
+         from PlateGeometry fields (bottom_mag_inset_x, stack_inset_x,
+         etc. -- passthroughs of the inputs), so it couldn't catch a bug
+         where the real boolean cut diverges from that metadata. Rewrote
+         it to ray-cast the actual mesh; verified (by temporarily
+         reproducing exactly that kind of divergence) that the old
+         version stayed green while the new one correctly fails.
+         (3) "front and back bores share X positions" (CLAUDE.md) had no
+         test that could actually catch a regression: a contains()-at-
+         centre probe has ~3 mm of slack from the bore radius, so a 2 mm
+         X shift on one side still lands inside the moved cavity. Added
+         a test that measures each side's cavity centre independently by
+         ray-casting and compares them to each other; verified (with the
+         same reproduced 2 mm-shift mutation) that it now fails where
+         the old contains()-based test didn't.
+         (4) the stacking-joint detail drawing had the same hatch-past-
+         the-edge bug just fixed in the magnet-bore drawing: det_x0
+         (jig-plate.py) came out negative at the default stack_inset_x
+         (4 mm), hatching ~3 mm of air past the plate's left edge as
+         solid, making the wall read as ~4 mm instead of 1.85 mm. Now
+         clamped to the plate's actual [0, plate_x] extent.
+         (5) a comment called 1.85 mm "the same clearance value already
+         used elsewhere in this design" -- true of the old 1.95 mm
+         figure, not of 1.85 mm (grepped the whole design; nothing else
+         uses it). Removed the false claim.
+         Verified still watertight; 26/26 tests pass.
 """
 import argparse
 from pathlib import Path
@@ -224,7 +256,7 @@ from matplotlib.patches import FancyBboxPatch
 
 from jig_plate_base import build_plate, bx
 
-VERSION = "2.4.6"
+VERSION = "2.4.7"
 OUT_DIR = Path(__file__).resolve().parent / "output"
 
 
@@ -681,8 +713,11 @@ def _tech_detail(out_path, geom):
     ax2.set_facecolor(BG)
 
     S2 = 22.0
-    det_x0 = geom.stack_xs[0] - geom.stack_len / 2 - 4.0
-    det_x1 = geom.stack_xs[0] + geom.stack_len / 2 + 4.0
+    # clamped to the plate's real X extent -- the unclamped window can run
+    # past the edge near this corner (stack_inset_x is only 4 mm at the
+    # defaults) and hatch that overrun as if it were solid material.
+    det_x0 = max(0.0, geom.stack_xs[0] - geom.stack_len / 2 - 4.0)
+    det_x1 = min(geom.plate_x, geom.stack_xs[0] + geom.stack_len / 2 + 4.0)
 
     # this plate's body: bottom face carries the recessed groove, top face
     # carries the raised rib -- both are the same solid, shown together so
