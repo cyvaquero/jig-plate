@@ -463,6 +463,69 @@ Changelog
          each end (removed, superseded by the new edge lines drawn at
          the true bounds).
          Verified still watertight; 80/80 tests pass.
+  2.4.12 the two items a seventh review round flagged as the ones that
+         matter, both closed by extending the derived-geometry check
+         from 2.4.11 rather than adding more bespoke rules:
+         (1) the debossed branding (top-face logo/label, and its mirrored
+         copies on the left/right faces) was never a feature box in that
+         check, so deboss_d had no upper limit and a long label at a
+         shallow deboss_d could reach into a magnet bore without being
+         rejected. Reproduced (deboss_d=9, deboss_d=20, and a 30-"W" label
+         at deboss_d=2, all previously accepted) and fixed by computing
+         each branding footprint once, early in build_plate(), and adding
+         it to the same feature-box list the mechanical bores/rib/groove
+         already use -- top-face box anchored to z_max, left/right-face
+         boxes anchored to x_min/x_max respectively. All three cases now
+         raise.
+         (2) both containment and pairwise-collision checks accepted any
+         positive separation (1e-6 epsilon), so a wall could be print-
+         impossible without being invalid. Reproduced three cases the
+         check let through: bottom_mag_inset_x=10.16 (0.01mm bore-to-
+         groove wall), front_margin=6.102 (0.001mm bottom-bore-to-front-
+         face wall), mag_depth=8.99 (0.01mm skin over the bottom bores).
+         Fixed with a real _min_wall = 0.8mm (two 0.4mm-nozzle perimeters)
+         applied to every non-anchored boundary and every pairwise gap;
+         the 1e-6 epsilon is now reserved for boundaries deliberately
+         anchored flush to a face (a bore's mouth, a branding cut's
+         depth). Verified via mutation testing: weakening _min_wall back
+         to 1e-6 fails exactly the 5 tests that depend on it and no
+         others.
+         Also fixes bundled from the same round (all documentation/
+         drawing, no geometry change):
+         (3) the magnet-bore-detail panel's front face (y=0) had no
+         outline above or below the bore -- a leftover comment claimed it
+         was "drawn solid" but no line was ever added for it when the
+         other three edges were split out in 2.4.11; restored.
+         (4) jig_plate_base.py's build_plate() docstring pointed at
+         CHANGELOG.md for current defaults, but that file only covers
+         released 2.x minors and its latest entry describes the honeycomb
+         cutout removed on develop in 2.4.5 -- repointed at this file's
+         own Changelog block, which stays current every round.
+         CHANGELOG.md gets a note to the same effect. README.md: the
+         magnet-polarity paragraph and the "mate either way round"
+         feature bullet described what sounded like the same guarantee
+         but weren't -- bore *positions* are symmetric so plates still
+         line up geometrically when turned 180 degrees, but a fixed
+         front/back polarity convention only attracts an unrotated
+         neighbour; reworded both to say so explicitly rather than
+         changing the (still undecided) physical polarity design. The
+         test-coupon bullet left out that the coupon also carries the
+         rightmost front push-fit bore at default mag_xs, which is what
+         lets it validate the bore-to-groove wall; added.
+         (5) the top plan view drew the stacking rib but never the
+         groove; added as a dashed rectangle (hidden-line convention)
+         around each rib, sized from stack_len/stack_w + stack_play like
+         the mechanical geometry itself. The stacking-joint detail sheet
+         gained a caption noting it's a composite view (groove and bore
+         cuts shown at their own Y positions, not one cross-section
+         plane) rather than trying to draw a single plane that doesn't
+         exist in the real geometry.
+         (6) re-verified the prior round's housekeeping claims (stale
+         origin/feature/sparse-coffer-lightening branch, stale output/
+         images files): both already false by the time this round
+         started -- no such remote branch exists, and output/images hold
+         only current-version files. No action needed.
+         Verified still watertight; 86/86 tests pass.
 """
 import argparse
 from pathlib import Path
@@ -484,7 +547,7 @@ def _faint(color, alpha):
     amount and made several section/body outlines nearly invisible."""
     return _to_rgba(color, alpha)
 
-VERSION = "2.4.11"
+VERSION = "2.4.12"
 OUT_DIR = Path(__file__).resolve().parent / "output"
 
 
@@ -791,10 +854,16 @@ def _tech_top_plan(out_path, geom):
             ax.plot(mx * S, my * S, "+", color=VIOLET, ms=3, mew=0.6,
                     zorder=5)
 
-    # corner stacking ribs (top face, visible) / grooves (bottom, hidden
-    # underneath at the same footprint plus play)
+    # corner stacking ribs (top face, visible) / grooves (bottom face,
+    # hidden -- dashed, same convention as the bottom-corner bores above)
     for mx in geom.stack_xs:
         for my in geom.stack_ys:
+            groove_len = geom.stack_len + geom.stack_play
+            groove_w = geom.stack_w + geom.stack_play
+            ax.add_patch(plt.Rectangle(
+                (mx * S - groove_len * S / 2, my * S - groove_w * S / 2),
+                groove_len * S, groove_w * S,
+                fc="none", ec=FG, lw=HIDDEN_LW, ls=HIDDEN_LS, zorder=4))
             ax.add_patch(plt.Rectangle(
                 (mx * S - geom.stack_len * S / 2, my * S - geom.stack_w * S / 2),
                 geom.stack_len * S, geom.stack_w * S,
@@ -928,6 +997,8 @@ def _tech_detail(out_path, geom):
     ax1.plot([mat_y0 * S1, plate_y1_m * S1], [0, 0], color=FG, lw=CUT_LW,
              zorder=3)
     ax1.plot([mat_y0 * S1, plate_y1_m * S1], [geom.plate_z * S1] * 2,
+             color=FG, lw=CUT_LW, zorder=3)
+    ax1.plot([mat_y0 * S1, mat_y0 * S1], [0, geom.plate_z * S1],
              color=FG, lw=CUT_LW, zorder=3)
     ax1.plot([plate_y1_m * S1, plate_y1_m * S1], [0, geom.plate_z * S1],
              color=MUTED, lw=0.6, ls=(0, (2, 1.5)), zorder=3)
@@ -1101,6 +1172,11 @@ def _tech_detail(out_path, geom):
              "Stacking Joint Detail",
              transform=ax2.transAxes, fontsize=7, ha="center", va="top",
              color=MUTED, fontfamily="sans-serif", fontweight="bold")
+    ax2.text(0.5, -0.10,
+             "composite view: groove and bore shown at their own Y "
+             "positions, not a single cross-section plane",
+             transform=ax2.transAxes, fontsize=5.5, ha="center", va="top",
+             color=MUTED, fontfamily="sans-serif", fontstyle="italic")
 
     _fit_view(ax1, ax2)
 

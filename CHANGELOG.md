@@ -7,6 +7,14 @@
 | **Meshes** | `jig_plate_<version>.stl` |
 | **Latest release** | 2.4.0 |
 
+> **Note:** 2.4.0's honeycomb lightening cutout (described below) was later
+> scrapped on `develop` -- material/print-time reduction is being handled in
+> the slicer instead. No new minor/major release has been cut since, so this
+> is still accurate as a record of what's on `main`, but it no longer
+> describes the *current default plate* on `develop`. For that, see the
+> `Changelog` block in `jig-plate.py`'s module docstring, which is kept
+> current on every change (iterative or not).
+
 ## Versioning
 
 `major.minor.iterative`

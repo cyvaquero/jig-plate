@@ -226,7 +226,10 @@ def build_plate(
     zones are so pockets can avoid them.
 
     `build_plate()` with no arguments reproduces the current default plate
-    exactly -- see CHANGELOG.md for what the defaults are and why.
+    exactly -- see the `Changelog` block in jig-plate.py's module docstring
+    for what the defaults are and why (the day-to-day, up-to-date record;
+    CHANGELOG.md only records major/minor releases, and its most recent
+    entry describes a feature since removed -- see its own top-of-file note).
 
     Returns a `PlateResult` (`.solid`: trimesh.Trimesh, `.geometry`:
     PlateGeometry). Pure -- no file I/O, no argv, no printing.
@@ -312,27 +315,92 @@ def build_plate(
     stack_xs = (stack_inset_x, plate_x - stack_inset_x)
     stack_ys = (stack_inset_y, plate_y - stack_inset_y)
 
-    # Every mechanical feature (magnet bores, stacking rib/groove) as an
-    # axis-aligned bounding box, checked for (a) staying within the
-    # plate's own bounds on every axis where it isn't deliberately
-    # supposed to reach or cross one (a blind bore's mouth sits exactly
-    # at the face it's drilled from; the rib deliberately stands proud
-    # above the top face), and (b) not colliding with any other feature.
-    # Bounding boxes around the round bores are a conservative
-    # approximation -- it can reject a few diagonal near-misses that
-    # would actually clear, but it can never miss a real collision,
-    # which is the property that matters here. This one mechanism is
-    # what catches every reported "still builds a broken/overlapping
-    # plate" case (bores merging into each other, into the groove, or
-    # breaking out through a face; the rib/groove pair breaching an
-    # edge), independent of *which* parameter combination causes it, so
-    # a new one doesn't need a new bespoke check.
+    # ---- debossed branding footprint (computed before the geometry
+    # check below, so the logo+label cuts can be validated the same way
+    # as every mechanical feature -- a long label at a shallow deboss_d
+    # can reach sideways into a magnet bore, and deboss_d alone (with no
+    # upper limit) can cut the top-face branding all the way through the
+    # plate; neither was checked before) ----
+    _front_cy = front_margin / 2
+
+    _tp0 = _text_polys(label, 4.0, 0, 0)
+    if not _tp0:
+        raise ValueError(
+            f"label {label!r} produces no renderable glyphs in the "
+            "debossed font (DejaVu Sans) -- e.g. zero-width characters "
+            "that pass a whitespace check but still render nothing"
+        )
+    _tb = [p.bounds for p in _tp0]
+    _tw = max(b[2] for b in _tb) - min(b[0] for b in _tb)
+    _tx0 = min(b[0] for b in _tb)
+    _lw = 6.0
+    _total = _lw + 3.0 + _tw
+    _sx = (plate_x - _total) / 2
+    _sx_left = (plate_y - _total) / 2
+
+    if _total > plate_y or _total > plate_x:
+        raise ValueError(
+            f"branding (logo + label {label!r}) is {_total:.1f} mm wide, "
+            f"wider than plate_y ({plate_y}) or plate_x ({plate_x}) -- "
+            "shorten the label or enlarge the plate"
+        )
+
+    # each face's actual logo+text polygons, computed once and reused
+    # both for the geometry check below and for the real cuts later --
+    # not recomputed, so what's validated is exactly what's cut.
+    _top_logo = _logo_polys(_sx + _lw / 2, _front_cy + 0.4)
+    _top_text = _text_polys(label, 4.0, _sx + _lw + 3.0 - _tx0, _front_cy - 2.0)
+    _top_all = _top_logo + _top_text
+    _top_x0 = min(p.bounds[0] for p in _top_all)
+    _top_x1 = max(p.bounds[2] for p in _top_all)
+    _top_y0 = min(p.bounds[1] for p in _top_all)
+    _top_y1 = max(p.bounds[3] for p in _top_all)
+
+    # left/right faces deboss the *same* logo+text polygons (see
+    # _add_deboss_left/_add_deboss_right below) through different
+    # transforms, so only one pair needs computing.
+    _side_logo = _logo_polys(_sx_left + _lw / 2, plate_z / 2 + 0.4)
+    _side_text = _text_polys(
+        label, 4.0, _sx_left + _lw + 3.0 - _tx0, plate_z / 2 - 2.0
+    )
+    _side_all = _side_logo + _side_text
+    _side_x0 = min(p.bounds[0] for p in _side_all)  # -> world Y
+    _side_x1 = max(p.bounds[2] for p in _side_all)
+    _side_z0 = min(p.bounds[1] for p in _side_all)  # -> world Z directly
+    _side_z1 = max(p.bounds[3] for p in _side_all)
+
+    if _side_z0 < 0 or _side_z1 > plate_z:
+        raise ValueError(
+            f"side-face branding (logo + label {label!r}) spans Z "
+            f"[{_side_z0:.2f}, {_side_z1:.2f}] mm, which doesn't "
+            f"fit within the plate's thickness [0, {plate_z}] -- increase "
+            "plate_z"
+        )
+
+    # Every mechanical feature (magnet bores, stacking rib/groove,
+    # debossed branding) as an axis-aligned bounding box, checked for
+    # (a) staying within the plate's own bounds -- with at least
+    # _min_wall of material left, not just non-negative -- on every axis
+    # where it isn't deliberately supposed to reach or cross one (a
+    # blind bore's mouth sits exactly at the face it's drilled from; the
+    # rib deliberately stands proud above the top face), and (b) not
+    # coming within _min_wall of any other feature. Bounding boxes
+    # around the round bores (and the irregular debossed glyph shapes)
+    # are a conservative approximation -- it can reject a few diagonal
+    # near-misses that would actually clear, but it can never miss a
+    # real collision, which is the property that matters here. This one
+    # mechanism is what catches every reported "still builds a broken/
+    # overlapping/paper-thin-walled plate" case, independent of *which*
+    # parameter combination causes it, so a new one doesn't need a new
+    # bespoke check.
     # `touch` names which of this feature's own boundaries is deliberately
     # anchored flush to a plate face (a blind bore's mouth, at the face
-    # it's drilled from) -- equality is fine there. Every other boundary
-    # must stay strictly inside, or the cut reaches exactly to (or past)
-    # the far face and leaves zero material there, which is just as
-    # broken as overshooting it.
+    # it's drilled from; the branding's cut depth, at the face it's
+    # debossed into) -- equality is fine there, no _min_wall required.
+    # Every other boundary must keep _min_wall clear of the far face, or
+    # the cut leaves less material there than can reliably print, which
+    # is just as broken as overshooting it outright.
+    _min_wall = 0.8  # ~2 perimeters at a common 0.4mm nozzle
     _features = []  # (name, (x0,y0,z0,x1,y1,z1), bounds_or_None, touch_set)
     _plate_bounds = (0.0, 0.0, 0.0, plate_x, plate_y, plate_z)
     for _mx in mag_xs:
@@ -374,12 +442,29 @@ def build_plate(
                  _my + (stack_w + stack_play) / 2, stack_h),
                 _plate_bounds, {"z_min"},
             ))
+    _features.append((
+        f"top-face branding (logo + label {label!r})",
+        (_top_x0, _top_y0, plate_z - deboss_d, _top_x1, _top_y1, plate_z),
+        _plate_bounds, {"z_max"},
+    ))
+    _features.append((
+        f"left-face branding (logo + label {label!r})",
+        (0.0, plate_y - _side_x1, _side_z0,
+         deboss_d, plate_y - _side_x0, _side_z1),
+        _plate_bounds, {"x_min"},
+    ))
+    _features.append((
+        f"right-face branding (logo + label {label!r})",
+        (plate_x - deboss_d, _side_x0, _side_z0,
+         plate_x, _side_x1, _side_z1),
+        _plate_bounds, {"x_max"},
+    ))
 
-    _eps = 1e-6
+    _eps = 1e-6  # floating-point noise only, on boundaries allowed to touch
 
     def _bound_ok(lo, hi, blo, bhi, touch_lo, touch_hi):
-        lo_ok = lo >= blo - _eps if touch_lo else lo >= blo + _eps
-        hi_ok = hi <= bhi + _eps if touch_hi else hi <= bhi - _eps
+        lo_ok = lo >= blo - _eps if touch_lo else lo >= blo + _min_wall - _eps
+        hi_ok = hi <= bhi + _eps if touch_hi else hi <= bhi - _min_wall + _eps
         return lo_ok and hi_ok
 
     for _name, _box, _bounds, _touch in _features:
@@ -391,18 +476,18 @@ def build_plate(
                           "x_min" in _touch, "x_max" in _touch):
             raise ValueError(
                 f"{_name} extends past the plate's left/right edge, or "
-                f"leaves no material there (X {_x0:.2f}..{_x1:.2f}, "
-                f"plate is 0..{_bx1:.2f})"
+                f"leaves less than {_min_wall}mm of material there "
+                f"(X {_x0:.2f}..{_x1:.2f}, plate is 0..{_bx1:.2f})"
             )
         if not _bound_ok(_y0, _y1, _by0, _by1,
                           "y_min" in _touch, "y_max" in _touch):
             raise ValueError(
                 f"{_name} extends past the plate's front/back edge, or "
-                f"leaves no material there (Y {_y0:.2f}..{_y1:.2f}, "
-                f"plate is 0..{_by1:.2f})"
+                f"leaves less than {_min_wall}mm of material there "
+                f"(Y {_y0:.2f}..{_y1:.2f}, plate is 0..{_by1:.2f})"
             )
         if _bz1 is None:
-            if _z0 < _bz0 - _eps if "z_min" in _touch else _z0 < _bz0 + _eps:
+            if _z0 < _bz0 - _eps if "z_min" in _touch else _z0 < _bz0 + _min_wall:
                 raise ValueError(
                     f"{_name} extends below the bottom face "
                     f"(Z min {_z0:.2f})"
@@ -411,8 +496,8 @@ def build_plate(
                             "z_min" in _touch, "z_max" in _touch):
             raise ValueError(
                 f"{_name} extends past the top or bottom face, or "
-                f"leaves no material there (Z {_z0:.2f}..{_z1:.2f}, "
-                f"plate is 0..{_bz1:.2f})"
+                f"leaves less than {_min_wall}mm of material there "
+                f"(Z {_z0:.2f}..{_z1:.2f}, plate is 0..{_bz1:.2f})"
             )
 
     for _i in range(len(_features)):
@@ -421,10 +506,18 @@ def build_plate(
         for _j in range(_i + 1, len(_features)):
             _name_b, _box_b, _, _ = _features[_j]
             _bx0, _by0, _bz0, _bx1, _by1, _bz1 = _box_b
-            if (_ax0 < _bx1 - _eps and _ax1 > _bx0 + _eps and
-                    _ay0 < _by1 - _eps and _ay1 > _by0 + _eps and
-                    _az0 < _bz1 - _eps and _az1 > _bz0 + _eps):
-                raise ValueError(f"{_name_a} collides with {_name_b}")
+            # per-axis separation (negative = actual overlap on that
+            # axis); if the *best* axis doesn't clear _min_wall, the two
+            # features are too close on every axis simultaneously, i.e.
+            # they either overlap outright or leave too thin a wall.
+            _gap_x = max(_ax0 - _bx1, _bx0 - _ax1)
+            _gap_y = max(_ay0 - _by1, _by0 - _ay1)
+            _gap_z = max(_az0 - _bz1, _bz0 - _az1)
+            if max(_gap_x, _gap_y, _gap_z) < _min_wall - _eps:
+                raise ValueError(
+                    f"{_name_a} comes within {_min_wall}mm of {_name_b} "
+                    "(or overlaps it)"
+                )
 
     cuts, marks, scribes = [], [], []
 
@@ -480,66 +573,14 @@ def build_plate(
                 )
             )
 
-    # ---- debossed branding on top face (front frame edge) ----
-    _front_cy = front_margin / 2
-
-    _tp0 = _text_polys(label, 4.0, 0, 0)
-    if not _tp0:
-        raise ValueError(
-            f"label {label!r} produces no renderable glyphs in the "
-            "debossed font (DejaVu Sans) -- e.g. zero-width characters "
-            "that pass a whitespace check but still render nothing"
-        )
-    _tb = [p.bounds for p in _tp0]
-    _tw = max(b[2] for b in _tb) - min(b[0] for b in _tb)
-    _tx0 = min(b[0] for b in _tb)
-    _lw = 6.0
-    _total = _lw + 3.0 + _tw
-    _sx = (plate_x - _total) / 2
-
-    if _total > plate_y or _total > plate_x:
-        raise ValueError(
-            f"branding (logo + label {label!r}) is {_total:.1f} mm wide, "
-            f"wider than plate_y ({plate_y}) or plate_x ({plate_x}) -- "
-            "shorten the label or enlarge the plate"
-        )
-    _logo_b0 = _logo_polys(0, 0)
-    _logo_y0 = min(p.bounds[1] for p in _logo_b0)
-    _logo_y1 = max(p.bounds[3] for p in _logo_b0)
-    _text_y0 = min(b[1] for b in _tb)
-    _text_y1 = max(b[3] for b in _tb)
-    _side_logo_cy = plate_z / 2 + 0.4
-    _side_text_cy = plate_z / 2 - 2.0
-    _branding_z0 = min(_side_logo_cy + _logo_y0, _side_text_cy + _text_y0)
-    _branding_z1 = max(_side_logo_cy + _logo_y1, _side_text_cy + _text_y1)
-    if _branding_z0 < 0 or _branding_z1 > plate_z:
-        raise ValueError(
-            f"side-face branding (logo + label {label!r}) spans Z "
-            f"[{_branding_z0:.2f}, {_branding_z1:.2f}] mm, which doesn't "
-            f"fit within the plate's thickness [0, {plate_z}] -- increase "
-            "plate_z"
-        )
-
-    _add_deboss(_logo_polys(_sx + _lw / 2, _front_cy + 0.4), scribes,
-                plate_z, deboss_d)
-    _add_deboss(_text_polys(label, 4.0, _sx + _lw + 3.0 - _tx0, _front_cy - 2.0),
-                scribes, plate_z, deboss_d)
-
-    _sx_left = (plate_y - _total) / 2
-
-    _add_deboss_left(_logo_polys(_sx_left + _lw / 2, plate_z / 2 + 0.4),
-                      scribes, plate_y, deboss_d)
-    _add_deboss_left(
-        _text_polys(label, 4.0, _sx_left + _lw + 3.0 - _tx0, plate_z / 2 - 2.0),
-        scribes, plate_y, deboss_d,
-    )
-
-    _add_deboss_right(_logo_polys(_sx_left + _lw / 2, plate_z / 2 + 0.4),
-                       scribes, plate_x, plate_y, deboss_d)
-    _add_deboss_right(
-        _text_polys(label, 4.0, _sx_left + _lw + 3.0 - _tx0, plate_z / 2 - 2.0),
-        scribes, plate_x, plate_y, deboss_d,
-    )
+    # ---- debossed branding cuts (top, left, right faces) -- reusing
+    # the exact polygons already validated above, not recomputed ----
+    _add_deboss(_top_logo, scribes, plate_z, deboss_d)
+    _add_deboss(_top_text, scribes, plate_z, deboss_d)
+    _add_deboss_left(_side_logo, scribes, plate_y, deboss_d)
+    _add_deboss_left(_side_text, scribes, plate_y, deboss_d)
+    _add_deboss_right(_side_logo, scribes, plate_x, plate_y, deboss_d)
+    _add_deboss_right(_side_text, scribes, plate_x, plate_y, deboss_d)
 
     plate = bx(0, 0, 0, plate_x, plate_y, plate_z)
     solid = trimesh.boolean.difference([plate] + cuts, engine="manifold")

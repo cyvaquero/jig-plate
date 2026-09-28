@@ -187,22 +187,34 @@ class TestParameterValidation:
         (dict(stack_play=-0.2), "stack_play .* must be >= 0"),
         (dict(plate_x=300.0), "exceeds 246"),
         # derived-geometry containment (a feature exceeds the plate, or
-        # reaches a face with no material left there)
+        # reaches a face with less than _min_wall of material left)
         (dict(mag_depth=9.5), "top or bottom face"),
         (dict(mag_d=10.0), "top or bottom face"),
-        (dict(plate_z=4.0), "top or bottom face"),
+        (dict(plate_z=4.0), "side-face branding"),  # branding Z-fit fires
+                                                      # first at this plate_z
         (dict(stack_h=9.0), "top or bottom face"),  # == plate_z: cuts clean through
         (dict(front_margin=0.0), "front/back edge"),
         (dict(stack_inset_x=2.0), "left/right edge"),
         (dict(stack_inset_y=0.5), "front/back edge"),
-        # derived-geometry collisions (two features overlap)
-        (dict(plate_x=50.0), "collides with"),
-        (dict(mag_count_x=40), "collides with"),
-        (dict(mag_inset_x=12.0), "collides with"),
-        (dict(bottom_mag_inset_x=5.0), "collides with"),
-        # branding footprint
+        # derived-geometry collisions (two features come within
+        # _min_wall of each other, or actually overlap)
+        (dict(plate_x=50.0), "comes within"),
+        (dict(mag_count_x=40), "comes within"),
+        (dict(mag_inset_x=12.0), "comes within"),
+        (dict(bottom_mag_inset_x=5.0), "comes within"),
+        # minimum wall thickness (features that clear each other/an edge
+        # but by much less than a printable wall)
+        (dict(bottom_mag_inset_x=10.16), "comes within"),  # ~0.01mm bore-groove wall
+        (dict(front_margin=6.102), "front/back edge"),  # ~0.001mm bore-to-edge wall
+        (dict(mag_depth=8.99), "top or bottom face"),  # ~0.01mm top skin
+        # debossed branding footprint (2D face fit, and now also part of
+        # the same 3D containment/collision system as every mechanical
+        # feature)
         (dict(label="X" * 70), "wider than plate_y"),
         (dict(label=None), "must be a str"),
+        (dict(deboss_d=9.0), "top or bottom face"),  # cuts clean through the top
+        (dict(deboss_d=20.0), "top or bottom face"),
+        (dict(label="W" * 30, deboss_d=2.0), "comes within"),  # reaches a bore
     ])
     def test_rejected(self, kwargs, match):
         with pytest.raises(ValueError, match=match):
