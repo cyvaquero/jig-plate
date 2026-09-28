@@ -41,28 +41,44 @@ def _cavity_center_x(solid, y, z, near_x):
     raise AssertionError(f"no cavity bracketing x={near_x}")
 
 
-def _debossed_cavity_clusters(solid, points, split_axis):
-    """Scan `points` for debossed cavities (not solid.contains()) and
-    split them into two clusters at the largest gap along `split_axis`
-    (0=x, 1=y, 2=z) -- the ~3mm gap build_plate() always leaves between
-    the logo and the label text. Returns (cluster1, cluster2) as lists
-    of points, cluster1 on the low side of the gap."""
-    contained = solid.contains(points)
-    cavity_pts = [p for p, c in zip(points, contained) if not c]
-    coords = sorted(set(round(p[split_axis], 2) for p in cavity_pts))
-    assert len(coords) > 1, "expected debossed cavities on this face"
+def _split_by_largest_gap(points, split_axis, expected_gap=None):
+    """Split a point cloud into two clusters at its largest gap along
+    `split_axis` (0=x, 1=y, 2=z). `points` may be raw sample points (only
+    some of which are cavities) or an already-filtered list of cavity
+    points -- either way this only looks at their coordinates, never
+    re-tests containment, so it's also used to recursively sub-split one
+    cluster this module already confirmed is a cavity region. When
+    `expected_gap` is given, asserts the found gap is close to it (a
+    sanity check that the split landed on the gap it was meant to)."""
+    coords = sorted(set(round(p[split_axis], 2) for p in points))
+    assert len(coords) > 1, "expected more than one distinct coordinate"
     gaps = [
         (coords[i + 1] - coords[i], coords[i], coords[i + 1])
         for i in range(len(coords) - 1)
     ]
     gap_size, gap_lo, gap_hi = max(gaps)
-    assert gap_size == pytest.approx(3.0, abs=1.0), (
-        "expected the ~3mm logo-to-text layout gap to be the largest gap "
-        f"along axis {split_axis} among debossed points"
-    )
+    if expected_gap is not None:
+        assert gap_size == pytest.approx(expected_gap, abs=1.0), (
+            f"expected the largest gap along axis {split_axis} to be "
+            f"~{expected_gap}mm, got {gap_size:.2f}mm"
+        )
     split = (gap_lo + gap_hi) / 2
-    cluster1 = [p for p in cavity_pts if p[split_axis] <= split]
-    cluster2 = [p for p in cavity_pts if p[split_axis] > split]
+    cluster1 = [p for p in points if p[split_axis] <= split]
+    cluster2 = [p for p in points if p[split_axis] > split]
+    return cluster1, cluster2
+
+
+def _debossed_cavity_clusters(solid, points, split_axis):
+    """Scan `points` for debossed cavities (not solid.contains()) and
+    split them into two clusters at the largest gap along `split_axis`
+    -- the ~3mm gap build_plate() always leaves between the logo and the
+    label text. Returns (cluster1, cluster2) as lists of cavity points,
+    cluster1 on the low side of the gap."""
+    contained = solid.contains(points)
+    cavity_pts = [p for p, c in zip(points, contained) if not c]
+    cluster1, cluster2 = _split_by_largest_gap(
+        cavity_pts, split_axis, expected_gap=3.0
+    )
     return cluster1, cluster2
 
 
@@ -85,11 +101,11 @@ class TestDefaultPlate:
 
 class TestLabel:
     def test_empty_label_rejected(self):
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="empty or whitespace"):
             build_plate(label="")
 
     def test_whitespace_only_label_rejected(self):
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="empty or whitespace"):
             build_plate(label="   ")
 
     @pytest.mark.parametrize("label", ["Jig Plate", "Card Jig", "A", "X" * 20])
@@ -97,28 +113,30 @@ class TestLabel:
         assert build_plate(label=label).solid.is_watertight
 
     def test_label_not_a_string_rejected(self):
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="must be a str"):
             build_plate(label=None)
 
     def test_label_with_unsupported_glyphs_rejected(self):
         # a zero-width character passes a whitespace check but still
         # crashes deep in matplotlib with an unrelated AttributeError if
-        # unhandled -- see 2.4.6.
-        with pytest.raises(ValueError):
+        # unhandled -- see 2.4.6. DejaVu Sans does have a (zero-area)
+        # glyph for it, so this is caught by the empty-render check, not
+        # the missing-glyph one below.
+        with pytest.raises(ValueError, match="no renderable glyphs"):
             build_plate(label="​")
 
     def test_label_with_cjk_rejected(self):
         # DejaVu Sans has no CJK glyphs -- would otherwise deboss the
         # font's .notdef placeholder box instead of failing.
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="no glyph in the debossed font"):
             build_plate(label="日本語")
 
     def test_label_with_newline_rejected(self):
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="no glyph in the debossed font"):
             build_plate(label="a\nb")
 
     def test_label_too_long_for_plate_y_rejected(self):
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="wider than plate_y"):
             build_plate(label="X" * 70)
 
     def test_label_with_dollar_signs_not_mathtext(self):
@@ -133,39 +151,71 @@ class TestLabel:
 
 
 class TestParameterValidation:
-    """Every build_plate() input check added in 2.4.8/2.4.9 -- each one
-    guards a reproduced failure mode (a crash with an unrelated/confusing
-    error, or a silently broken/nonsensical plate that still reports
-    watertight: True). See CHANGELOG.md for what each looked like before
-    the check existed."""
+    """Every build_plate() input check -- each one guards a reproduced
+    failure mode (a crash with an unrelated/confusing error, or a
+    silently broken/nonsensical plate that still reports
+    watertight: True). See the `Changelog` block in jig-plate.py's
+    module docstring for what each looked like before the check existed
+    (these are iterative changes, not in CHANGELOG.md, which only
+    records major/minor releases).
 
-    @pytest.mark.parametrize("kwargs", [
-        dict(plate_x=300.0),                 # exceeds the 246mm bed/purge limit
-        dict(plate_x=float("nan")),          # non-finite
-        dict(plate_x=-5.0),                  # non-positive
-        dict(plate_y=0.0),                   # non-positive
-        dict(mag_count_x=1),                 # divides by (mag_count_x - 1)
-        dict(mag_count_x=0),
-        dict(mag_count_x=2.0),               # must be int, not float
-        dict(mag_depth=9.5),                 # >= plate_z: breaks through top face
-        dict(mag_depth=110.0),               # >= plate_y/2: bores meet/break through
-        dict(mag_d=10.0),                    # >= plate_z: front/back bores break through
-        dict(plate_x=50.0),                  # <= 2*mag_inset_x: bore X order reverses
-        dict(mag_count_x=40),                # bores overlap/merge
-        dict(plate_z=4.0),                   # side-face branding breaks through top
-        dict(stack_h=9.0),                   # >= plate_z: groove cuts all the way through
-        dict(stack_inset_x=2.0),             # < stack_len/2: rib/groove past the edge
-        dict(stack_inset_y=0.5),             # < stack_w/2: rib/groove past the edge
-        dict(label=None),                    # not a str
+    Every case below matches on the actual error message, not just
+    "some ValueError" -- a bare pytest.raises(ValueError) passes no
+    matter *which* check fires, so deleting the specific check this
+    case is meant to guard can leave the suite green if a different,
+    unrelated check happens to also reject that input (verified: with
+    match=, deleting a check now fails only the case(s) naming it).
+    """
+
+    @pytest.mark.parametrize("kwargs,match", [
+        # type / finiteness / sign
+        (dict(plate_x="abc"), "plate_x must be a number"),
+        (dict(plate_x=float("nan")), "plate_x must be finite"),
+        (dict(plate_x=-5.0), "must be positive"),
+        (dict(plate_y=0.0), "must be positive"),
+        (dict(mag_count_x=2.0), "mag_count_x must be an int"),
+        (dict(mag_count_x=True), "mag_count_x must be an int"),
+        (dict(mag_d=-1.0), "mag_d must be positive"),
+        (dict(mag_depth=0.0), "mag_depth must be positive"),
+        (dict(stack_w=0.0), "stack_w must be positive"),
+        (dict(stack_len=0.0), "stack_len must be positive"),
+        (dict(stack_h=0.0), "stack_h must be positive"),
+        (dict(deboss_d=0.0), "deboss_d must be positive"),
+        (dict(back_margin=-1.0), "front_margin/back_margin must be >= 0"),
+        (dict(mag_count_x=1), "mag_count_x .* must be >= 2"),
+        (dict(mag_count_x=0), "mag_count_x .* must be >= 2"),
+        (dict(stack_play=-0.2), "stack_play .* must be >= 0"),
+        (dict(plate_x=300.0), "exceeds 246"),
+        # derived-geometry containment (a feature exceeds the plate, or
+        # reaches a face with no material left there)
+        (dict(mag_depth=9.5), "top or bottom face"),
+        (dict(mag_d=10.0), "top or bottom face"),
+        (dict(plate_z=4.0), "top or bottom face"),
+        (dict(stack_h=9.0), "top or bottom face"),  # == plate_z: cuts clean through
+        (dict(front_margin=0.0), "front/back edge"),
+        (dict(stack_inset_x=2.0), "left/right edge"),
+        (dict(stack_inset_y=0.5), "front/back edge"),
+        # derived-geometry collisions (two features overlap)
+        (dict(plate_x=50.0), "collides with"),
+        (dict(mag_count_x=40), "collides with"),
+        (dict(mag_inset_x=12.0), "collides with"),
+        (dict(bottom_mag_inset_x=5.0), "collides with"),
+        # branding footprint
+        (dict(label="X" * 70), "wider than plate_y"),
+        (dict(label=None), "must be a str"),
     ])
-    def test_rejected(self, kwargs):
-        with pytest.raises(ValueError):
+    def test_rejected(self, kwargs, match):
+        with pytest.raises(ValueError, match=match):
             build_plate(**kwargs)
 
-    def test_valid_override_still_builds(self):
+    @pytest.mark.parametrize("kwargs", [
+        dict(mag_count_x=6),
+        dict(plate_z=12.0),
+    ])
+    def test_valid_override_still_builds(self, kwargs):
         # a sanity check that the checks above aren't just universally
-        # rejecting -- a legitimately different, still-valid plate works.
-        result = build_plate(mag_count_x=6, mag_inset_x=15.0, plate_z=12.0)
+        # rejecting -- legitimately different, still-valid plates work.
+        result = build_plate(**kwargs)
         assert result.solid.is_watertight
 
 
@@ -389,7 +439,10 @@ class TestMeshGeometry:
         # the top face embeds local_x/local_y directly as world_x/world_y
         # (no axis flip at all -- see _add_deboss), so the logo (laid out
         # first, smaller local-x) must sit at a LOWER world X than the
-        # text, matching source order.
+        # text block, matching source order. This only catches the
+        # logo-vs-text block swapped wholesale; test_top_face_glyph_
+        # order_is_not_reversed below catches the letters *within* the
+        # text being individually reversed, which this can't see.
         result = build_plate()
         g, solid = result.geometry, result.solid
         probe_z = g.plate_z - g.deboss_d / 2
@@ -406,6 +459,41 @@ class TestMeshGeometry:
         # the actual check: logo (cluster1, lower X) reads before text
         # (cluster2, higher X), matching source order -- not reversed.
         assert max(p[0] for p in cluster1) < min(p[0] for p in cluster2)
+
+    def test_top_face_glyph_order_is_not_reversed(self):
+        # a block-level check (logo vs. text) can't see individual
+        # letters swapped *within* the text -- e.g. "IW" debossed as
+        # "WI" would still pass test_top_face_text_is_not_reversed,
+        # since the logo-to-text-block order is untouched. Label chosen
+        # so its two letters have very different widths (I narrow, W
+        # wide), letting the two be told apart without assuming the
+        # order being tested.
+        result = build_plate(label="IW")
+        g, solid = result.geometry, result.solid
+        probe_z = g.plate_z - g.deboss_d / 2
+        x_samples = np.arange(1.0, g.plate_x - 1.0, 0.3)
+        y_samples = np.arange(0.5, g.front_margin + 5.0, 0.3)
+        pts = [(x, y, probe_z) for x in x_samples for y in y_samples]
+        logo_cluster, text_cluster = _debossed_cavity_clusters(
+            solid, pts, split_axis=0
+        )
+        # identify the logo independently of any width comparison to the
+        # text (which varies by label, and for "IW" is only ~5mm, close
+        # enough to the logo's fixed 6mm to make a relative "narrower"
+        # comparison unreliable): the logo's own width is a fixed
+        # constant (_lw = 6mm) regardless of label.
+        logo_width = max(p[0] for p in logo_cluster) - min(p[0] for p in logo_cluster)
+        assert logo_width == pytest.approx(6.0, abs=1.5)
+
+        i_cluster, w_cluster = _split_by_largest_gap(text_cluster, split_axis=0)
+        i_width = max(p[0] for p in i_cluster) - min(p[0] for p in i_cluster)
+        w_width = max(p[0] for p in w_cluster) - min(p[0] for p in w_cluster)
+        # "I" must be the narrower glyph -- confirms the split found the
+        # two letters, not two fragments of one.
+        assert i_width < w_width
+        # the actual check: "I" (narrow) reads before "W" (wide) within
+        # the text block, matching source order -- not reversed.
+        assert max(p[0] for p in i_cluster) < min(p[0] for p in w_cluster)
 
 
 class TestGeometryPositions:

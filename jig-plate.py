@@ -404,6 +404,65 @@ Changelog
          edge -- now drawn as a dashed break when it isn't one).
          Verified still watertight; 65/65 tests pass (2 updated for
          the tuple type change).
+  2.4.11 fixes from a sixth review round -- the per-parameter validation
+         built up over 2.4.8-2.4.10 kept finding new gaps every round
+         (mag_inset_x=12 merges a front bore into a bottom one,
+         front_margin=0 breaks a bottom bore out the front face,
+         stack_play<0 makes the groove narrower than the rib, mag_depth=0
+         cuts no bore at all, ...), so build_plate() now checks the
+         *derived geometry* directly instead of one bespoke rule per
+         parameter: every magnet bore, stacking rib, and groove is built
+         as a 3D box, checked for (a) staying within the plate on every
+         axis it isn't deliberately anchored to a face on, and (b) not
+         colliding with any other feature's box. Reproduced and confirmed
+         every case above, plus everything the five checks it replaces
+         already covered (mag_depth/mag_d/stack_h breaking through a
+         face, bores merging from too many/too-close bores, the rib/
+         groove breaching an edge) -- one mechanism now covers all of
+         them, independent of which parameter combination causes it.
+         Bounding boxes around the round bores are a conservative
+         (not exact) approximation, noted in the code. Kept as separate,
+         still-bespoke checks: type/finite/sign validation, mag_count_x
+         >= 2 (divide-by-zero, not a geometry question), stack_play >= 0
+         (rib/groove size compatibility for stacking, not a same-plate
+         collision), plate_x <= 246mm (CLAUDE.md's bed/purge constraint),
+         and the label/branding-footprint checks (2D face fit, a
+         different category from 3D mechanical collision).
+         Also: the validation tests were weaker than claimed -- deleting
+         any one of five checks left the suite green, because every case
+         used a bare pytest.raises(ValueError) that passes no matter
+         which check fires. Every case now matches the specific message
+         (verified: deleting a check now fails only the case naming it,
+         checked for both a single check and the whole collision
+         mechanism). The top-face text-orientation test only caught the
+         logo and label swapping order as whole blocks, not the letters
+         within the label itself being reversed -- added a test using an
+         asymmetric two-letter label ("IW", narrow-then-wide) that sub-
+         splits the text region and checks the letters' own order;
+         verified it fails where the block-level check doesn't, by
+         temporarily reversing the rendered character order.
+         Drawing fixes (bundled into this same release since it also
+         contains the changes above -- see CLAUDE.md's versioning rules
+         for why a drawing-only change alone wouldn't bump anything):
+         every "Scale N:1" label across all four drawings is deleted --
+         S is a coordinate multiplier that cancels out under equal-
+         aspect autoscaling, so the labelled scale was never the actual
+         one (measured: labelled 2:1/10:1/45:1/22:1, actual around
+         0.74:1/1.2:1/5:1/5:1) -- a screen render doesn't have a
+         meaningful physical scale to state, and the dimension figures
+         on each drawing are what's accurate regardless. The _faint()
+         edge-dimming fix from 5892a23 had only been applied to 3 of 8
+         affected patches; applied to the remaining 5 (isometric magnet/
+         rib markers, top-plan rib, magnet-bore-detail's reference
+         magnet box, stacking-joint's rib). The magnet-bore-detail panel
+         had the same two bugs the stacking-joint panel was fixed for in
+         5892a23 but never got the fix itself: its own window cutoff
+         (11.2mm) was drawn as a real edge (now a dashed break, matching
+         the real front/back-face edge staying solid), and a redundant
+         face-outline line overshot the part's actual Z extent by 1mm on
+         each end (removed, superseded by the new edge lines drawn at
+         the true bounds).
+         Verified still watertight; 80/80 tests pass.
 """
 import argparse
 from pathlib import Path
@@ -425,7 +484,7 @@ def _faint(color, alpha):
     amount and made several section/body outlines nearly invisible."""
     return _to_rgba(color, alpha)
 
-VERSION = "2.4.10"
+VERSION = "2.4.11"
 OUT_DIR = Path(__file__).resolve().parent / "output"
 
 
@@ -521,7 +580,7 @@ def _plate_diagram(out_path, geom):
     # mirror-image front face at y=0 is never drawn in this view)
     for mx in geom.mag_xs:
         mag_pt = iso(mx * S, py, pz * 0.5)
-        ax.add_patch(MplCircle(mag_pt, 3.5, fc=VIOLET, alpha=0.6,
+        ax.add_patch(MplCircle(mag_pt, 3.5, fc=_faint(VIOLET, 0.6),
                      ec=FG, lw=0.4, zorder=4))
 
     # corner stacking rib footprint, top-left-front corner, for reference
@@ -529,7 +588,7 @@ def _plate_diagram(out_path, geom):
     ax.add_patch(MplPoly(
         iso_rect(sx0 - geom.stack_len * S / 2, sy0 - geom.stack_w * S / 2,
                  sx0 + geom.stack_len * S / 2, sy0 + geom.stack_w * S / 2, pz),
-        fc=AMBER, alpha=0.7, ec=FG, lw=0.4, zorder=4))
+        fc=_faint(AMBER, 0.7), ec=FG, lw=0.6, zorder=4))
 
     top_ctr = iso(px / 2, py / 2, pz)
     ax.text(top_ctr[0], top_ctr[1], "Top face",
@@ -673,11 +732,21 @@ def _hatch_rect(ax, x0, y0, x1, y1, angle=45, spacing=1.5):
     _hatch_fill(ax, clip, cx, cy, diag, angle, spacing)
 
 
-def _title_block(ax, title, scale_label):
+def _title_block(ax, title):
     # below the axes, not inside it: on a wide flat view like the front
     # elevation the box is short enough that an inset caption lands on
-    # the drawing
-    ax.text(0.99, -0.08, f"{title}  |  v{VERSION}  |  {scale_label}",
+    # the drawing.
+    #
+    # No "Scale N:1" here (and none on the other drawings either): S is
+    # just the mm-to-plot-units multiplier used to build the coordinates
+    # handed to matplotlib, and every one of these axes is equal-aspect
+    # and autoscaled to fit the figure -- so S cancels out of the
+    # rendered image entirely and any "Scale" figure quoting it is
+    # fiction (measured on the actual renders: labelled 2:1, 10:1, 45:1
+    # and 22:1, actual were closer to 0.74:1, 1.2:1, 5:1 and 5:1). A
+    # screen render doesn't have a meaningful physical scale to state;
+    # the dimension figures on the drawing itself are what's accurate.
+    ax.text(0.99, -0.08, f"{title}  |  v{VERSION}",
             transform=ax.transAxes, fontsize=7, ha="right", va="top",
             color=MUTED, fontfamily="sans-serif")
 
@@ -729,7 +798,7 @@ def _tech_top_plan(out_path, geom):
             ax.add_patch(plt.Rectangle(
                 (mx * S - geom.stack_len * S / 2, my * S - geom.stack_w * S / 2),
                 geom.stack_len * S, geom.stack_w * S,
-                fc=AMBER, alpha=0.6, ec=FG, lw=0.6, zorder=5))
+                fc=_faint(AMBER, 0.6), ec=FG, lw=0.6, zorder=5))
 
     # overall dimensions
     _dim_h(ax, geom.plate_y * S, 0, geom.plate_x * S,
@@ -760,7 +829,7 @@ def _tech_top_plan(out_path, geom):
            f"{geom.stack_inset_x:.0f}", offset=-8 * S, side="below",
            fontsize=6.5)
 
-    _title_block(ax, "Top Plan View", f"Scale {S}:1 (screen)")
+    _title_block(ax, "Top Plan View")
 
     ax.autoscale_view()
     ax.margins(0.06)
@@ -813,7 +882,7 @@ def _tech_front_elevation(out_path, geom):
     _dim_v(ax, geom.mag_xs[0] * S, 0, (geom.plate_z / 2) * S,
            f"{geom.plate_z / 2:.1f}", offset=-6 * S, side="left", fontsize=6)
 
-    _title_block(ax, "Front Elevation", f"Scale {S}:1 (screen)")
+    _title_block(ax, "Front Elevation")
 
     ax.autoscale_view()
     ax.margins(x=0.03, y=0.15)
@@ -845,12 +914,23 @@ def _tech_detail(out_path, geom):
     bore_r = geom.mag_d / 2
     mag_cz = geom.plate_z / 2
 
+    # left (y=0, mat_y0) is the plate's real front/back face -- drawn
+    # solid. Right (y=plate_y1_m) is just where this window stops, not a
+    # real edge (the actual opposite face is at y=plate_y, off-screen) --
+    # drawn as a break so it doesn't read as one. Same fix as the
+    # stacking-joint panel got in 5892a23.
     plate_verts = [
         (mat_y0, 0), (plate_y1_m, 0),
         (plate_y1_m, geom.plate_z), (mat_y0, geom.plate_z),
     ]
     ax1.add_patch(MplPoly([(y * S1, z * S1) for y, z in plate_verts],
-                  fc=_faint(SHAPE, 0.10), ec=FG, lw=CUT_LW, zorder=2))
+                  fc=_faint(SHAPE, 0.10), ec="none", zorder=2))
+    ax1.plot([mat_y0 * S1, plate_y1_m * S1], [0, 0], color=FG, lw=CUT_LW,
+             zorder=3)
+    ax1.plot([mat_y0 * S1, plate_y1_m * S1], [geom.plate_z * S1] * 2,
+             color=FG, lw=CUT_LW, zorder=3)
+    ax1.plot([plate_y1_m * S1, plate_y1_m * S1], [0, geom.plate_z * S1],
+             color=MUTED, lw=0.6, ls=(0, (2, 1.5)), zorder=3)
     _hatch_rect(ax1, mat_y0 * S1, 0, plate_y1_m * S1,
                 (mag_cz - bore_r) * S1, spacing=4.5)
     _hatch_rect(ax1, mat_y0 * S1, (mag_cz + bore_r) * S1,
@@ -872,14 +952,12 @@ def _tech_detail(out_path, geom):
         (mag_depth, mag_cz + mag_r), (0, mag_cz + mag_r),
     ]
     ax1.add_patch(MplPoly([(y * S1, z * S1) for y, z in mag_verts],
-                  fc=VIOLET, alpha=0.2, ec=VIOLET, lw=0.8,
+                  fc=_faint(VIOLET, 0.2), ec=VIOLET, lw=0.8,
                   ls="--", zorder=4))
     ax1.text(mag_depth / 2 * S1, mag_cz * S1, "magnet\n6×3",
              fontsize=6.5, ha="center", va="center", color=VIOLET,
              fontfamily="sans-serif", fontstyle="italic", zorder=5)
 
-    ax1.plot([0, 0], [-1 * S1, (geom.plate_z + 1) * S1],
-             color=FG, lw=CUT_LW, zorder=3)
     ax1.plot([leader_y0 * S1, plate_y1_m * S1],
              [mag_cz * S1, mag_cz * S1],
              color=DIM_COLOR, lw=0.4, ls=(0, (8, 4)), zorder=2)
@@ -900,7 +978,7 @@ def _tech_detail(out_path, geom):
                fontsize=5.5)
 
     ax1.text(0.5, -0.02,
-             f"Magnet Bore Detail  |  Scale {S1:.0f}:1",
+             "Magnet Bore Detail",
              transform=ax1.transAxes, fontsize=7, ha="center", va="top",
              color=MUTED, fontfamily="sans-serif", fontweight="bold")
 
@@ -955,7 +1033,7 @@ def _tech_detail(out_path, geom):
         (rib_x1, geom.plate_z + geom.stack_h), (rib_x0, geom.plate_z + geom.stack_h),
     ]
     ax2.add_patch(MplPoly([(x * S2, z * S2) for x, z in rib_verts],
-                  fc=AMBER, alpha=0.55, ec=FG, lw=CUT_LW, zorder=4))
+                  fc=_faint(AMBER, 0.55), ec=FG, lw=CUT_LW, zorder=4))
 
     play = geom.stack_play / 2
     groove_verts = [
@@ -1020,7 +1098,7 @@ def _tech_detail(out_path, geom):
            f"{wall:.2f}", offset=_wall_dim_z * S2, fontsize=6.5)
 
     ax2.text(0.5, -0.02,
-             f"Stacking Joint Detail  |  Scale {S2:.0f}:1",
+             "Stacking Joint Detail",
              transform=ax2.transAxes, fontsize=7, ha="center", va="top",
              color=MUTED, fontfamily="sans-serif", fontweight="bold")
 
