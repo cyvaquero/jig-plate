@@ -226,9 +226,8 @@ def build_plate(
             cuts.append(c)
 
     # bottom-face corner mounting magnet bores. Inset kept close to the
-    # corner stacking rib/groove (1.85 mm wall between them in X, the same
-    # clearance value already used elsewhere in this design) rather than
-    # the plate edge, since the rib/groove -- not the edge -- is the
+    # corner stacking rib/groove (1.85 mm wall between them in X) rather
+    # than the plate edge, since the rib/groove -- not the edge -- is the
     # nearest feature at the default stack_inset_x/_y.
     for mx in (bottom_mag_inset_x, plate_x - bottom_mag_inset_x):
         for my in bottom_mag_ys:

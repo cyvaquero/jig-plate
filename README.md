@@ -45,6 +45,7 @@ below.
 - [trimesh](https://trimesh.org/) with the
   [Manifold](https://github.com/elalish/manifold) boolean engine
 - NumPy, Shapely, Matplotlib
+- pytest, rtree (for the test suite -- see [Tests](#tests))
 
 ```bash
 python3 -m venv .venv

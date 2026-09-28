@@ -25,6 +25,22 @@ def _volume(result):
     return result.solid.volume
 
 
+def _cavity_center_x(solid, y, z, near_x):
+    """X centre of the cavity bracketing `near_x`, measured on the mesh
+    by ray-casting along +X at a fixed (y, z) and finding the pair of
+    solid/cavity crossings nearest `near_x`. Precise (not a radius-wide
+    contains() probe), so a several-mm shift in the real cut is caught
+    even though a naive centre-point probe would still land inside it."""
+    origin = [[-1.0, y, z]]
+    direction = [[1.0, 0.0, 0.0]]
+    locs, _, _ = solid.ray.intersects_location(origin, direction)
+    xs = sorted(locs[:, 0])
+    for i in range(len(xs) - 1):
+        if xs[i] <= near_x <= xs[i + 1]:
+            return (xs[i] + xs[i + 1]) / 2
+    raise AssertionError(f"no cavity bracketing x={near_x}")
+
+
 class TestDefaultPlate:
     def test_watertight(self):
         assert build_plate().solid.is_watertight
@@ -68,6 +84,24 @@ class TestMeshGeometry:
         back_pts = [(mx, g.plate_y - 0.5, z) for mx in g.mag_xs]
         assert not any(solid.contains(front_pts))
         assert not any(solid.contains(back_pts))
+
+    def test_front_back_magnet_bores_share_x_position_on_the_mesh(self):
+        # CLAUDE.md: "front and back bores share X positions ... so
+        # plates mate either way round." A contains()-at-centre probe
+        # can't catch a real regression here: the bore radius is 3.05mm,
+        # so even a 2mm X shift of one side still lands the probe point
+        # inside the (moved) cavity. Measure each side's actual cavity
+        # centre independently via ray-casting instead, and compare them
+        # to each other -- not to the PlateGeometry.mag_xs list both
+        # sides are naively built from in the naive version above.
+        result = build_plate()
+        g, solid = result.geometry, result.solid
+        z = g.plate_z / 2
+        for nominal_x in g.mag_xs:
+            front_centre = _cavity_center_x(solid, 0.5, z, nominal_x)
+            back_centre = _cavity_center_x(solid, g.plate_y - 0.5, z, nominal_x)
+            assert front_centre == pytest.approx(nominal_x, abs=0.05)
+            assert back_centre == pytest.approx(front_centre, abs=0.05)
 
     def test_between_front_magnet_bores_is_solid(self):
         result = build_plate()
@@ -121,13 +155,28 @@ class TestMeshGeometry:
         assert not solid.contains(pt)[0]
 
     def test_magnet_bore_to_stack_groove_wall(self):
-        # documented at 1.85 mm (README.md, jig_plate_base.py comments) --
-        # verify it on the actual mesh rather than trusting the comment.
+        # documented at 1.85 mm (README.md, jig_plate_base.py comments).
+        # Measured by ray-casting the actual mesh, not by recomputing the
+        # wall from PlateGeometry fields (bottom_mag_inset_x, stack_inset_x,
+        # etc.) -- those are passthroughs of the *inputs*, so a bug that
+        # only shifts the real boolean cut (and not the returned metadata)
+        # would be invisible to an arithmetic-only check like that.
         result = build_plate()
-        g = result.geometry
-        bore_edge = g.bottom_mag_inset_x - g.mag_d / 2
-        groove_edge = g.stack_inset_x + (g.stack_len + g.stack_play) / 2
-        assert bore_edge - groove_edge == pytest.approx(1.85, abs=1e-6)
+        g, solid = result.geometry, result.solid
+        # probe just inside the groove's Y edge nearest the bore -- the
+        # narrowest point of the wall, since the bore is a circle whose X
+        # extent (at a given Y) widens as Y approaches the bore's own
+        # centre, and the groove's Y range doesn't reach that centre.
+        y = g.stack_ys[0] + (g.stack_w + g.stack_play) / 2 - 0.01
+        z = 0.75  # inside both the groove's Z range [0, stack_h] and the
+                  # bottom-corner bore's Z range
+        origin = [[-1.0, y, z]]
+        direction = [[1.0, 0.0, 0.0]]
+        locs, _, _ = solid.ray.intersects_location(origin, direction)
+        xs = sorted(locs[:, 0])
+        groove_far_edge, bore_near_edge = xs[2], xs[3]
+        wall = bore_near_edge - groove_far_edge
+        assert wall == pytest.approx(1.85, abs=0.02)
 
 
 class TestGeometryPositions:
