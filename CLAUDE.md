@@ -65,9 +65,12 @@ filenames and the 80-byte STL header (`head -c 80 file.stl`). Keep `version` in
   the generation-logic clause as the only one that matters.
 - **minor / major**: bump only when explicitly told to; zero the fields below it
 
-Every iterative change gets a one-line entry in the `Changelog` block of the
-script docstring. `CHANGELOG.md` records **major and minor releases only** —
-do not add iterative entries there; they are folded into the next minor release.
+Every iterative change gets an entry in the `Changelog` block of the script
+docstring -- a short summary line, but with as many follow-up lines as needed
+to name what changed, why, and what was verified; these have run to several
+lines per entry in practice, not literally one line. `CHANGELOG.md` records
+**major and minor releases only** — do not add iterative entries there; they
+are folded into the next minor release.
 
 ## Git
 
@@ -82,9 +85,14 @@ carrying the magnet-bore and stacking-joint cross-sections). These are
 documentation, not geometry: a drawing-only change bumps nothing and gets no
 changelog entry.
 
-- Views frame themselves through `_fit_view`, never hand-tuned `set_xlim` /
-  `set_ylim`. Dimension labels are `ax.text`, which never reaches `dataLim`,
-  so plain autoscaling crops them — that is what `_fit_view` corrects for.
+- No view hand-tunes `set_xlim`/`set_ylim`. Most call `ax.autoscale_view()`
+  plus `ax.margins()` directly; the two-panel detail sheet (magnet-bore and
+  stacking-joint cross-sections, sharing one figure) uses `_fit_view` instead,
+  since autoscaling each panel independently would give them different
+  scales. Dimension labels are `ax.text`, which never reaches `dataLim`, so
+  plain autoscaling crops them — that is what `_fit_view` corrects for, and
+  why the margins the other views pass to `ax.margins()` need to be generous
+  enough to leave room for their own dimension text.
 
 ## Design constraints that must not be regressed
 

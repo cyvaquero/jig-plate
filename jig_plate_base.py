@@ -232,9 +232,9 @@ def build_plate(
     PlateGeometry). Pure -- no file I/O, no argv, no printing.
     """
     # ---- input validation -----------------------------------------
-    # Every check below has a reproduced failure mode behind it (a crash
-    # with an unrelated/confusing error, or a silently broken/nonsensical
-    # plate that still reports watertight: True) -- see CHANGELOG.md.
+    # Type/finiteness/sign checks first (a bad type or a nonsensical
+    # negative/zero size fails fast, with its own clear message, rather
+    # than surfacing as a collision against something else below).
     if not isinstance(label, str):
         raise ValueError(f"label must be a str, got {type(label).__name__}")
     if not label.strip():
@@ -259,94 +259,172 @@ def build_plate(
         ("deboss_d", deboss_d),
     ):
         if isinstance(_value, bool) or not isinstance(_value, (int, float)):
-            raise ValueError(
-                f"{_name} must be a number, got {_value!r}"
-            )
+            raise ValueError(f"{_name} must be a number, got {_value!r}")
         if not np.isfinite(_value):
             raise ValueError(f"{_name} must be finite, got {_value!r}")
+    if isinstance(mag_count_x, bool) or not isinstance(mag_count_x, int):
+        raise ValueError(f"mag_count_x must be an int, got {mag_count_x!r}")
+
     if plate_x <= 0 or plate_y <= 0 or plate_z <= 0:
         raise ValueError(
             f"plate_x/plate_y/plate_z must be positive, got "
             f"({plate_x}, {plate_y}, {plate_z})"
         )
-    if isinstance(mag_count_x, bool) or not isinstance(mag_count_x, int):
+    # every dimension that sizes an actual cut/mark feature must be
+    # strictly positive, or that feature silently vanishes (mag_depth=0
+    # cuts no bore at all, stack_h=0 leaves no rib, deboss_d=0 debosses
+    # nothing) rather than failing -- caught here, not by the collision
+    # check below, since a zero-size feature never overlaps anything.
+    for _name, _value in (
+        ("mag_d", mag_d), ("mag_depth", mag_depth),
+        ("stack_w", stack_w), ("stack_len", stack_len),
+        ("stack_h", stack_h), ("deboss_d", deboss_d),
+    ):
+        if _value <= 0:
+            raise ValueError(f"{_name} must be positive, got {_value}")
+    if front_margin < 0 or back_margin < 0:
         raise ValueError(
-            f"mag_count_x must be an int, got {mag_count_x!r}"
-        )
-
-    if plate_x > 246.0:
-        raise ValueError(
-            f"plate_x ({plate_x}) exceeds 246 mm (bed width + purge-area "
-            "clearance -- see CLAUDE.md)"
+            f"front_margin/back_margin must be >= 0, got "
+            f"({front_margin}, {back_margin})"
         )
     if mag_count_x < 2:
         raise ValueError(
             f"mag_count_x ({mag_count_x}) must be >= 2 -- the bore-spacing "
             "formula divides by (mag_count_x - 1)"
         )
-    if mag_depth >= plate_z:
+    if stack_play < 0:
         raise ValueError(
-            f"mag_depth ({mag_depth}) must be less than plate_z ({plate_z}), "
-            "or the bottom-corner mounting bore breaks through the top face"
+            f"stack_play ({stack_play}) must be >= 0, or the groove is cut "
+            "narrower than the rib it has to receive -- two plates "
+            "couldn't stack"
         )
-    if mag_depth >= plate_y / 2:
+    if plate_x > 246.0:
         raise ValueError(
-            f"mag_depth ({mag_depth}) must be less than plate_y/2 "
-            f"({plate_y / 2}), or the front and back push-fit bores meet "
-            "or break through the opposite face"
-        )
-    if mag_d >= plate_z:
-        raise ValueError(
-            f"mag_d ({mag_d}) must be less than plate_z ({plate_z}), or "
-            "the front/back push-fit bores break through the top or "
-            "bottom face"
-        )
-    if plate_x <= 2 * mag_inset_x:
-        raise ValueError(
-            f"plate_x ({plate_x}) must be greater than 2 * mag_inset_x "
-            f"({2 * mag_inset_x}), or the magnet-bore X positions go out "
-            "of increasing order"
-        )
-    if stack_h >= plate_z:
-        raise ValueError(
-            f"stack_h ({stack_h}) must be less than plate_z ({plate_z}), "
-            "or the stacking groove cuts all the way through the plate"
-        )
-    if stack_inset_x < stack_len / 2:
-        raise ValueError(
-            f"stack_inset_x ({stack_inset_x}) must be >= stack_len/2 "
-            f"({stack_len / 2}), or the corner stacking rib/groove "
-            "extends past the plate's left/right edge"
-        )
-    if stack_inset_y < stack_w / 2:
-        raise ValueError(
-            f"stack_inset_y ({stack_inset_y}) must be >= stack_w/2 "
-            f"({stack_w / 2}), or the corner stacking rib/groove extends "
-            "past the plate's front/back edge"
+            f"plate_x ({plate_x}) exceeds 246 mm (bed width + purge-area "
+            "clearance -- see CLAUDE.md)"
         )
 
     mag_xs = tuple(
         mag_inset_x + i * (plate_x - 2 * mag_inset_x) / (mag_count_x - 1)
         for i in range(mag_count_x)
     )
-    if mag_xs[0] - mag_d / 2 < 0 or mag_xs[-1] + mag_d / 2 > plate_x:
-        raise ValueError(
-            "front/back magnet bores extend past the plate's left/right "
-            f"edge at mag_xs={mag_xs}, mag_d={mag_d}, plate_x={plate_x}"
-        )
-    if mag_count_x > 1:
-        _min_spacing = min(b - a for a, b in zip(mag_xs, mag_xs[1:]))
-        if _min_spacing < mag_d:
-            raise ValueError(
-                f"front/back magnet bores overlap: spacing "
-                f"({_min_spacing:.2f}) is less than the bore diameter "
-                f"mag_d ({mag_d}) -- reduce mag_count_x or increase "
-                "plate_x/mag_inset_x"
-            )
-
     bottom_mag_ys = (front_margin / 2, plate_y - back_margin / 2)
     stack_xs = (stack_inset_x, plate_x - stack_inset_x)
     stack_ys = (stack_inset_y, plate_y - stack_inset_y)
+
+    # Every mechanical feature (magnet bores, stacking rib/groove) as an
+    # axis-aligned bounding box, checked for (a) staying within the
+    # plate's own bounds on every axis where it isn't deliberately
+    # supposed to reach or cross one (a blind bore's mouth sits exactly
+    # at the face it's drilled from; the rib deliberately stands proud
+    # above the top face), and (b) not colliding with any other feature.
+    # Bounding boxes around the round bores are a conservative
+    # approximation -- it can reject a few diagonal near-misses that
+    # would actually clear, but it can never miss a real collision,
+    # which is the property that matters here. This one mechanism is
+    # what catches every reported "still builds a broken/overlapping
+    # plate" case (bores merging into each other, into the groove, or
+    # breaking out through a face; the rib/groove pair breaching an
+    # edge), independent of *which* parameter combination causes it, so
+    # a new one doesn't need a new bespoke check.
+    # `touch` names which of this feature's own boundaries is deliberately
+    # anchored flush to a plate face (a blind bore's mouth, at the face
+    # it's drilled from) -- equality is fine there. Every other boundary
+    # must stay strictly inside, or the cut reaches exactly to (or past)
+    # the far face and leaves zero material there, which is just as
+    # broken as overshooting it.
+    _features = []  # (name, (x0,y0,z0,x1,y1,z1), bounds_or_None, touch_set)
+    _plate_bounds = (0.0, 0.0, 0.0, plate_x, plate_y, plate_z)
+    for _mx in mag_xs:
+        _features.append((
+            f"front push-fit bore @x={_mx:.2f}",
+            (_mx - mag_d / 2, 0.0, plate_z / 2 - mag_d / 2,
+             _mx + mag_d / 2, mag_depth, plate_z / 2 + mag_d / 2),
+            _plate_bounds, {"y_min"},
+        ))
+        _features.append((
+            f"back push-fit bore @x={_mx:.2f}",
+            (_mx - mag_d / 2, plate_y - mag_depth, plate_z / 2 - mag_d / 2,
+             _mx + mag_d / 2, plate_y, plate_z / 2 + mag_d / 2),
+            _plate_bounds, {"y_max"},
+        ))
+    for _mx in (bottom_mag_inset_x, plate_x - bottom_mag_inset_x):
+        for _my in bottom_mag_ys:
+            _features.append((
+                f"bottom-corner mounting bore @({_mx:.2f}, {_my:.2f})",
+                (_mx - mag_d / 2, _my - mag_d / 2, 0.0,
+                 _mx + mag_d / 2, _my + mag_d / 2, mag_depth),
+                _plate_bounds, {"z_min"},
+            ))
+    for _mx in stack_xs:
+        for _my in stack_ys:
+            # the rib stands proud above the top face by design, so its
+            # containment check has no Z-upper-bound
+            _features.append((
+                f"stacking rib @({_mx:.2f}, {_my:.2f})",
+                (_mx - stack_len / 2, _my - stack_w / 2, plate_z,
+                 _mx + stack_len / 2, _my + stack_w / 2, plate_z + stack_h),
+                (0.0, 0.0, 0.0, plate_x, plate_y, None), set(),
+            ))
+            _features.append((
+                f"stacking groove @({_mx:.2f}, {_my:.2f})",
+                (_mx - (stack_len + stack_play) / 2,
+                 _my - (stack_w + stack_play) / 2, 0.0,
+                 _mx + (stack_len + stack_play) / 2,
+                 _my + (stack_w + stack_play) / 2, stack_h),
+                _plate_bounds, {"z_min"},
+            ))
+
+    _eps = 1e-6
+
+    def _bound_ok(lo, hi, blo, bhi, touch_lo, touch_hi):
+        lo_ok = lo >= blo - _eps if touch_lo else lo >= blo + _eps
+        hi_ok = hi <= bhi + _eps if touch_hi else hi <= bhi - _eps
+        return lo_ok and hi_ok
+
+    for _name, _box, _bounds, _touch in _features:
+        if _bounds is None:
+            continue
+        _x0, _y0, _z0, _x1, _y1, _z1 = _box
+        _bx0, _by0, _bz0, _bx1, _by1, _bz1 = _bounds
+        if not _bound_ok(_x0, _x1, _bx0, _bx1,
+                          "x_min" in _touch, "x_max" in _touch):
+            raise ValueError(
+                f"{_name} extends past the plate's left/right edge, or "
+                f"leaves no material there (X {_x0:.2f}..{_x1:.2f}, "
+                f"plate is 0..{_bx1:.2f})"
+            )
+        if not _bound_ok(_y0, _y1, _by0, _by1,
+                          "y_min" in _touch, "y_max" in _touch):
+            raise ValueError(
+                f"{_name} extends past the plate's front/back edge, or "
+                f"leaves no material there (Y {_y0:.2f}..{_y1:.2f}, "
+                f"plate is 0..{_by1:.2f})"
+            )
+        if _bz1 is None:
+            if _z0 < _bz0 - _eps if "z_min" in _touch else _z0 < _bz0 + _eps:
+                raise ValueError(
+                    f"{_name} extends below the bottom face "
+                    f"(Z min {_z0:.2f})"
+                )
+        elif not _bound_ok(_z0, _z1, _bz0, _bz1,
+                            "z_min" in _touch, "z_max" in _touch):
+            raise ValueError(
+                f"{_name} extends past the top or bottom face, or "
+                f"leaves no material there (Z {_z0:.2f}..{_z1:.2f}, "
+                f"plate is 0..{_bz1:.2f})"
+            )
+
+    for _i in range(len(_features)):
+        _name_a, _box_a, _, _ = _features[_i]
+        _ax0, _ay0, _az0, _ax1, _ay1, _az1 = _box_a
+        for _j in range(_i + 1, len(_features)):
+            _name_b, _box_b, _, _ = _features[_j]
+            _bx0, _by0, _bz0, _bx1, _by1, _bz1 = _box_b
+            if (_ax0 < _bx1 - _eps and _ax1 > _bx0 + _eps and
+                    _ay0 < _by1 - _eps and _ay1 > _by0 + _eps and
+                    _az0 < _bz1 - _eps and _az1 > _bz0 + _eps):
+                raise ValueError(f"{_name_a} collides with {_name_b}")
 
     cuts, marks, scribes = [], [], []
 
