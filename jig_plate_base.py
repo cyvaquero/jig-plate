@@ -81,24 +81,48 @@ def _logo_polys(cx, cy):
     return parts
 
 
-def _text_polys(text, size, x0, y0):
-    """Shapely polygons for extrudable text at (x0, y0) baseline."""
-    from matplotlib.textpath import TextPath as _TP
+def _label_font_properties():
     from matplotlib.font_manager import FontProperties as _FP
     # pinned to the font matplotlib bundles internally (not a system font),
     # so the debossed text is identical on macOS, Windows, and Linux
-    try:
-        tp = _TP((x0, y0), text, size=size,
-                 prop=_FP(family="DejaVu Sans", weight="bold"))
-    except AttributeError:
-        # matplotlib's TextPath construction fails with an unrelated,
-        # confusing AttributeError ('list' object has no attribute
-        # 'flags') when `text` renders to zero glyphs -- e.g. a label
-        # made only of zero-width characters, which passes a plain
-        # whitespace check -- instead of returning an empty path
-        # cleanly. Treat that the same as "no glyphs" so the caller can
-        # raise a clear error instead of this one leaking out.
+    return _FP(family="DejaVu Sans", weight="bold")
+
+
+def _unsupported_label_chars(text):
+    """Characters in `text` with no real glyph in the debossed font
+    (DejaVu Sans) -- e.g. CJK or other scripts it doesn't cover, or
+    control characters like a literal newline. Rendering these anyway
+    doesn't fail: the font's .notdef glyph is a visible placeholder box
+    that would get debossed as-is, so the caller should reject them with
+    a clear message instead."""
+    import matplotlib.ft2font as _ft2font
+    from matplotlib.font_manager import findfont as _findfont
+    font = _ft2font.FT2Font(_findfont(_label_font_properties()))
+    seen = {}
+    for ch in text:
+        if ch not in seen:
+            seen[ch] = font.get_char_index(ord(ch)) == 0
+    return [ch for ch in dict.fromkeys(text) if seen[ch]]
+
+
+def _text_polys(text, size, x0, y0):
+    """Shapely polygons for extrudable text at (x0, y0) baseline."""
+    from matplotlib.textpath import text_to_path as _t2p
+    from matplotlib.path import Path as _Path
+    from matplotlib.transforms import Affine2D as _Affine2D
+    # ismath=False always: TextPath's default auto-detects mathtext from
+    # a balanced pair of $ in the string, which turned "Save $5 and $6"
+    # into LaTeX-formatted "Save 5and6" and made a lone "$\foo$" crash as
+    # invalid mathtext syntax. This label is debossed plate branding, not
+    # a formula, so every character (including $ and \) always renders
+    # as its own literal DejaVu Sans glyph.
+    verts, codes = _t2p.get_text_path(
+        _label_font_properties(), text, ismath=False
+    )
+    if len(verts) == 0:
         return []
+    tr = _Affine2D().scale(size / _t2p.FONT_SCALE).translate(x0, y0)
+    tp = _Path(tr.transform(verts), codes)
     raw = tp.to_polygons()
     polys = []
     for v in raw:
@@ -207,8 +231,49 @@ def build_plate(
     Returns a `PlateResult` (`.solid`: trimesh.Trimesh, `.geometry`:
     PlateGeometry). Pure -- no file I/O, no argv, no printing.
     """
+    # ---- input validation -----------------------------------------
+    # Every check below has a reproduced failure mode behind it (a crash
+    # with an unrelated/confusing error, or a silently broken/nonsensical
+    # plate that still reports watertight: True) -- see CHANGELOG.md.
+    if not isinstance(label, str):
+        raise ValueError(f"label must be a str, got {type(label).__name__}")
     if not label.strip():
         raise ValueError("label must not be empty or whitespace-only")
+    _bad_chars = _unsupported_label_chars(label)
+    if _bad_chars:
+        raise ValueError(
+            f"label {label!r} contains characters with no glyph in the "
+            f"debossed font (DejaVu Sans), which would deboss as visible "
+            f"placeholder boxes instead: {_bad_chars!r}"
+        )
+
+    for _name, _value in (
+        ("plate_x", plate_x), ("plate_y", plate_y), ("plate_z", plate_z),
+        ("mag_d", mag_d), ("mag_depth", mag_depth),
+        ("mag_inset_x", mag_inset_x),
+        ("bottom_mag_inset_x", bottom_mag_inset_x),
+        ("front_margin", front_margin), ("back_margin", back_margin),
+        ("stack_w", stack_w), ("stack_len", stack_len),
+        ("stack_h", stack_h), ("stack_play", stack_play),
+        ("stack_inset_x", stack_inset_x), ("stack_inset_y", stack_inset_y),
+        ("deboss_d", deboss_d),
+    ):
+        if isinstance(_value, bool) or not isinstance(_value, (int, float)):
+            raise ValueError(
+                f"{_name} must be a number, got {_value!r}"
+            )
+        if not np.isfinite(_value):
+            raise ValueError(f"{_name} must be finite, got {_value!r}")
+    if plate_x <= 0 or plate_y <= 0 or plate_z <= 0:
+        raise ValueError(
+            f"plate_x/plate_y/plate_z must be positive, got "
+            f"({plate_x}, {plate_y}, {plate_z})"
+        )
+    if isinstance(mag_count_x, bool) or not isinstance(mag_count_x, int):
+        raise ValueError(
+            f"mag_count_x must be an int, got {mag_count_x!r}"
+        )
+
     if plate_x > 246.0:
         raise ValueError(
             f"plate_x ({plate_x}) exceeds 246 mm (bed width + purge-area "
@@ -230,11 +295,55 @@ def build_plate(
             f"({plate_y / 2}), or the front and back push-fit bores meet "
             "or break through the opposite face"
         )
+    if mag_d >= plate_z:
+        raise ValueError(
+            f"mag_d ({mag_d}) must be less than plate_z ({plate_z}), or "
+            "the front/back push-fit bores break through the top or "
+            "bottom face"
+        )
+    if plate_x <= 2 * mag_inset_x:
+        raise ValueError(
+            f"plate_x ({plate_x}) must be greater than 2 * mag_inset_x "
+            f"({2 * mag_inset_x}), or the magnet-bore X positions go out "
+            "of increasing order"
+        )
+    if stack_h >= plate_z:
+        raise ValueError(
+            f"stack_h ({stack_h}) must be less than plate_z ({plate_z}), "
+            "or the stacking groove cuts all the way through the plate"
+        )
+    if stack_inset_x < stack_len / 2:
+        raise ValueError(
+            f"stack_inset_x ({stack_inset_x}) must be >= stack_len/2 "
+            f"({stack_len / 2}), or the corner stacking rib/groove "
+            "extends past the plate's left/right edge"
+        )
+    if stack_inset_y < stack_w / 2:
+        raise ValueError(
+            f"stack_inset_y ({stack_inset_y}) must be >= stack_w/2 "
+            f"({stack_w / 2}), or the corner stacking rib/groove extends "
+            "past the plate's front/back edge"
+        )
 
     mag_xs = [
         mag_inset_x + i * (plate_x - 2 * mag_inset_x) / (mag_count_x - 1)
         for i in range(mag_count_x)
     ]
+    if mag_xs[0] - mag_d / 2 < 0 or mag_xs[-1] + mag_d / 2 > plate_x:
+        raise ValueError(
+            "front/back magnet bores extend past the plate's left/right "
+            f"edge at mag_xs={mag_xs}, mag_d={mag_d}, plate_x={plate_x}"
+        )
+    if mag_count_x > 1:
+        _min_spacing = min(b - a for a, b in zip(mag_xs, mag_xs[1:]))
+        if _min_spacing < mag_d:
+            raise ValueError(
+                f"front/back magnet bores overlap: spacing "
+                f"({_min_spacing:.2f}) is less than the bore diameter "
+                f"mag_d ({mag_d}) -- reduce mag_count_x or increase "
+                "plate_x/mag_inset_x"
+            )
+
     bottom_mag_ys = [front_margin / 2, plate_y - back_margin / 2]
     stack_xs = (stack_inset_x, plate_x - stack_inset_x)
     stack_ys = (stack_inset_y, plate_y - stack_inset_y)
@@ -309,6 +418,29 @@ def build_plate(
     _lw = 6.0
     _total = _lw + 3.0 + _tw
     _sx = (plate_x - _total) / 2
+
+    if _total > plate_y or _total > plate_x:
+        raise ValueError(
+            f"branding (logo + label {label!r}) is {_total:.1f} mm wide, "
+            f"wider than plate_y ({plate_y}) or plate_x ({plate_x}) -- "
+            "shorten the label or enlarge the plate"
+        )
+    _logo_b0 = _logo_polys(0, 0)
+    _logo_y0 = min(p.bounds[1] for p in _logo_b0)
+    _logo_y1 = max(p.bounds[3] for p in _logo_b0)
+    _text_y0 = min(b[1] for b in _tb)
+    _text_y1 = max(b[3] for b in _tb)
+    _side_logo_cy = plate_z / 2 + 0.4
+    _side_text_cy = plate_z / 2 - 2.0
+    _branding_z0 = min(_side_logo_cy + _logo_y0, _side_text_cy + _text_y0)
+    _branding_z1 = max(_side_logo_cy + _logo_y1, _side_text_cy + _text_y1)
+    if _branding_z0 < 0 or _branding_z1 > plate_z:
+        raise ValueError(
+            f"side-face branding (logo + label {label!r}) spans Z "
+            f"[{_branding_z0:.2f}, {_branding_z1:.2f}] mm, which doesn't "
+            f"fit within the plate's thickness [0, {plate_z}] -- increase "
+            "plate_z"
+        )
 
     _add_deboss(_logo_polys(_sx + _lw / 2, _front_cy + 0.4), scribes,
                 plate_z, deboss_d)
