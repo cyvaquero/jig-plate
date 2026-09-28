@@ -87,8 +87,18 @@ def _text_polys(text, size, x0, y0):
     from matplotlib.font_manager import FontProperties as _FP
     # pinned to the font matplotlib bundles internally (not a system font),
     # so the debossed text is identical on macOS, Windows, and Linux
-    tp = _TP((x0, y0), text, size=size,
-             prop=_FP(family="DejaVu Sans", weight="bold"))
+    try:
+        tp = _TP((x0, y0), text, size=size,
+                 prop=_FP(family="DejaVu Sans", weight="bold"))
+    except AttributeError:
+        # matplotlib's TextPath construction fails with an unrelated,
+        # confusing AttributeError ('list' object has no attribute
+        # 'flags') when `text` renders to zero glyphs -- e.g. a label
+        # made only of zero-width characters, which passes a plain
+        # whitespace check -- instead of returning an empty path
+        # cleanly. Treat that the same as "no glyphs" so the caller can
+        # raise a clear error instead of this one leaking out.
+        return []
     raw = tp.to_polygons()
     polys = []
     for v in raw:
@@ -199,6 +209,27 @@ def build_plate(
     """
     if not label.strip():
         raise ValueError("label must not be empty or whitespace-only")
+    if plate_x > 246.0:
+        raise ValueError(
+            f"plate_x ({plate_x}) exceeds 246 mm (bed width + purge-area "
+            "clearance -- see CLAUDE.md)"
+        )
+    if mag_count_x < 2:
+        raise ValueError(
+            f"mag_count_x ({mag_count_x}) must be >= 2 -- the bore-spacing "
+            "formula divides by (mag_count_x - 1)"
+        )
+    if mag_depth >= plate_z:
+        raise ValueError(
+            f"mag_depth ({mag_depth}) must be less than plate_z ({plate_z}), "
+            "or the bottom-corner mounting bore breaks through the top face"
+        )
+    if mag_depth >= plate_y / 2:
+        raise ValueError(
+            f"mag_depth ({mag_depth}) must be less than plate_y/2 "
+            f"({plate_y / 2}), or the front and back push-fit bores meet "
+            "or break through the opposite face"
+        )
 
     mag_xs = [
         mag_inset_x + i * (plate_x - 2 * mag_inset_x) / (mag_count_x - 1)
@@ -266,6 +297,12 @@ def build_plate(
     _front_cy = front_margin / 2
 
     _tp0 = _text_polys(label, 4.0, 0, 0)
+    if not _tp0:
+        raise ValueError(
+            f"label {label!r} produces no renderable glyphs in the "
+            "debossed font (DejaVu Sans) -- e.g. zero-width characters "
+            "that pass a whitespace check but still render nothing"
+        )
     _tb = [p.bounds for p in _tp0]
     _tw = max(b[2] for b in _tb) - min(b[0] for b in _tb)
     _tx0 = min(b[0] for b in _tb)
