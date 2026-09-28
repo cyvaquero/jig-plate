@@ -286,6 +286,59 @@ Changelog
          order) via a 2D mesh scan, not just the sign-convention
          reasoning in a comment.
          Verified still watertight; 38/38 tests pass.
+  2.4.9  fixes from a fourth round of independent code review:
+         (1) top-plan front/back magnet bores were drawn as circles
+         centred on the plate edge -- half the circle rendered outside
+         the part. They're blind horizontal bores, not through-holes;
+         seen from above a blind bore projects as a mag_d x mag_depth
+         rectangle starting at the face and receding inward, so redrawn
+         as that (dashed, matching the hidden-feature convention already
+         used for the bottom bores). The "through-faces" comment nearby
+         was also wrong -- they're blind.
+         (2) all five build_plate() validations from 2.4.8 (plate_x,
+         mag_count_x, both mag_depth checks, the no-glyph label check)
+         had no tests -- deleting any one of them left all 38 tests
+         green. Added a parametrized test per check (verified: deleting
+         the plate_x>246 check now fails exactly its own test case and
+         nothing else).
+         (3) many more invalid inputs still silently built a broken
+         "watertight" plate instead of failing: mag_d >= plate_z (front/
+         back bores break through top/bottom -- reproduced with
+         mag_d=10), mag_count_x large enough to merge bores (reproduced
+         with mag_count_x=40), plate_x small enough to reverse the
+         bore-position order (reproduced with plate_x=50), plate_z too
+         thin for the side-face logo (reproduced with plate_z=4),
+         stack_h >= plate_z (groove cuts all the way through, reproduced
+         with stack_h=9), stack_inset_x/y less than the rib half-width
+         (the actual rendered part exceeds 246mm even though plate_x
+         itself is 246 -- reproduced with stack_inset_x=2, giving a
+         248mm-wide part the old plate_x-only check never saw), and a
+         label long enough to run off the side faces (reproduced at 70
+         chars). Also: plate_x=nan, a negative plate_x, a float
+         mag_count_x, and label=None previously failed with unrelated
+         builtin errors instead of a clear message -- now validated
+         explicitly. All added as new build_plate() checks with tests.
+         (4) labels were parsed as LaTeX mathtext whenever they
+         contained a balanced $...$ pair -- "Save $5 and $6" silently
+         debossed as "Save 5and6" in italics, and a lone "$\\foo$"
+         crashed as invalid mathtext syntax (reproduced both). Text
+         rendering now bypasses TextPath's default mathtext
+         autodetection entirely (calls the lower-level text-to-path API
+         with ismath=False), so every character -- including $ and \\ --
+         always renders as its own literal glyph. Separately, a label
+         with characters the debossed font has no glyph for (CJK
+         scripts, a literal newline) previously produced a visible
+         placeholder "tofu" box instead of failing; now checked via the
+         font's actual glyph coverage (FreeType) and rejected with the
+         offending characters named.
+         (5) only the right face had a text-orientation test -- reversing
+         the left-face mapping or mirroring the top-face one still left
+         all 38 tests green. Added the same 2D-mesh-scan check for the
+         left face (expects the opposite Y order from the right face,
+         since _add_deboss_left negates the axis) and the top face
+         (expects unflipped X order, since _add_deboss doesn't remap
+         axes at all).
+         Verified still watertight; 65/65 tests pass.
 """
 import argparse
 from pathlib import Path
@@ -299,7 +352,7 @@ from matplotlib.patches import FancyBboxPatch
 
 from jig_plate_base import build_plate, bx
 
-VERSION = "2.4.8"
+VERSION = "2.4.9"
 OUT_DIR = Path(__file__).resolve().parent / "output"
 
 
@@ -559,22 +612,25 @@ def _tech_top_plan(out_path, geom):
     ax.add_patch(plt.Rectangle((0, 0), geom.plate_x * S, geom.plate_y * S,
                  fc="none", ec=FG, lw=CUT_LW, zorder=3))
 
-    # magnet bores (front and back faces). Circle radius in data
-    # coordinates (not ax.plot's `ms`, which is a fixed marker size in
-    # points, independent of the drawing's S-scale and so the wrong
-    # diameter at any scale other than the one it happened to be tuned
-    # for) -- same approach as the bottom-face bores below, which share
-    # the same mag_d.
+    # magnet bores (front and back faces) -- blind bores drilled
+    # horizontally inward from the Y face, not through-holes, so seen
+    # from directly above they project as a mag_d (X) x mag_depth (Y)
+    # rectangle starting at the face and receding into the material,
+    # not a circle centred on the edge (half of which would render
+    # outside the part). Hidden from this top-down view past the
+    # entrance, so dashed like the bottom-face bores below.
     for mx in geom.mag_xs:
-        for y_face in [0, geom.plate_y]:
-            ax.add_patch(plt.Circle((mx * S, y_face * S), geom.mag_d * S / 2,
-                         fc="none", ec=VIOLET, lw=1.0, zorder=5))
+        for y_face, into_sign in ((0.0, 1.0), (geom.plate_y, -1.0)):
+            y0 = y_face if into_sign > 0 else y_face - geom.mag_depth
+            ax.add_patch(plt.Rectangle(
+                (mx * S - geom.mag_d * S / 2, y0 * S),
+                geom.mag_d * S, geom.mag_depth * S,
+                fc="none", ec=VIOLET, lw=HIDDEN_LW, ls=HIDDEN_LS, zorder=5))
             ax.plot(mx * S, y_face * S, "+", color=VIOLET, ms=3, mew=0.6,
                     zorder=5)
 
-    # bottom-face mounting magnets: hidden from this view (underside), so
-    # drawn dashed per the hidden-line convention rather than the solid
-    # circles used for the front/back through-faces above
+    # bottom-face mounting magnets: also hidden (blind, drilled straight
+    # up from the underside), drawn dashed for the same reason
     for mx in (geom.bottom_mag_inset_x, geom.plate_x - geom.bottom_mag_inset_x):
         for my in geom.bottom_mag_ys:
             ax.add_patch(plt.Circle((mx * S, my * S), geom.mag_d * S / 2,
