@@ -20,7 +20,11 @@ below.
   outer footprint rather than any pocket layout, so plates holding different
   blanks still stack together
 - **8 magnet bores** (Ø6.1 mm, push-fit for 6 × 3 mm magnets) in the front and
-  back faces, symmetric about the centreline so plates mate either way round
+  back faces, symmetric about the centreline so a plate's bore *positions*
+  still line up with its neighbours' if it's turned 180° -- see the polarity
+  note under [Printing notes](#printing-notes): the fixed front/back polarity
+  convention below matches unrotated plates to each other, not a plate
+  rotated 180° to its unrotated neighbours
 - **4 more magnet bores** (same Ø6.1 mm / 6 × 3 mm spec) in the bottom-face
   corners, for mounting the plate itself
 - **Debossed branding** — logo mark plus a text label (default "Jig Plate",
@@ -28,10 +32,12 @@ below.
   duplicated on the left and right faces (each mirrored to read correctly
   from its own side) for readability when plates are stacked or stored on
   edge
-- **Test coupon** — a corner piece carrying the stacking rib/groove and its
-  mounting magnet, for validating the stacking fit *and* the wall between
-  the magnet bore and the stacking rib/groove (1.85 mm at the defaults),
-  independently of any pocket layout added later
+- **Test coupon** — a corner piece carrying the stacking rib/groove, its
+  bottom mounting magnet, and (at the default `mag_xs`) the rightmost front
+  push-fit bore, which also falls inside this corner's cut region -- for
+  validating the stacking fit *and* the wall between the mounting bore and
+  the stacking rib/groove (1.85 mm at the defaults), independently of any
+  pocket layout added later
 
 ## Dimensions
 
@@ -123,7 +129,11 @@ parameter list — all of it defaults to the same base plate this CLI ships.
 - Print flat, top face up.
 - Press 6 × 3 mm magnets into the bores. Keep polarity consistent: one pole out
   on every front-face magnet, the opposite on every back-face magnet, or some
-  pairs will repel.
+  pairs will repel. This convention attracts an *unrotated* neighbour (the
+  common case, plates arranged front-to-back in a row); a plate turned 180°
+  presents what was its back face where a front face is expected, so its
+  magnets would need the opposite polarity from this rule to still attract
+  rather than repel there.
 
 ## Versioning
 
