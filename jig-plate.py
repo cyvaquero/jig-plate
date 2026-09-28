@@ -563,6 +563,20 @@ Changelog
          mutation testing that reverting the Z depth to plain stack_h
          fails exactly that test plus the volume regression test, no
          others.
+  3.0.0  major release folding 2.4.1-2.4.13. See CHANGELOG.md for the
+         full record; in short: the bottom-face honeycomb/coffer
+         lightening cutout 2.4.0 shipped with was built out further
+         (2.4.1-2.4.4) and then fully reverted (2.4.5) -- material/
+         print-time reduction is handled in the slicer instead, so the
+         default plate is a solid slab again, unchanged from 2.3.0/
+         pre-2.3.1. Everything else is six rounds of independent code
+         review (2.4.6-2.4.13): build_plate() went from no input
+         validation to a derived-geometry check covering every
+         mechanical feature and the debossed branding, with a real
+         0.8mm minimum wall and full X/Y/Z rib-groove fit play; several
+         drawing and STL-header bugs were fixed; the test suite grew
+         from 0 to 86 tests, each one verified (by mutation testing) to
+         actually catch what it claims to.
 """
 import argparse
 from pathlib import Path
@@ -584,7 +598,7 @@ def _faint(color, alpha):
     amount and made several section/body outlines nearly invisible."""
     return _to_rgba(color, alpha)
 
-VERSION = "2.4.13"
+VERSION = "3.0.0"
 OUT_DIR = Path(__file__).resolve().parent / "output"
 
 

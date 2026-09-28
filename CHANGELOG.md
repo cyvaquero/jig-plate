@@ -5,15 +5,7 @@
 | **Generator (CLI)** | `jig-plate.py` |
 | **Generator (library)** | `jig_plate_base.py` (`build_plate()`) |
 | **Meshes** | `jig_plate_<version>.stl` |
-| **Latest release** | 2.4.0 |
-
-> **Note:** 2.4.0's honeycomb lightening cutout (described below) was later
-> scrapped on `develop` -- material/print-time reduction is being handled in
-> the slicer instead. No new minor/major release has been cut since, so this
-> is still accurate as a record of what's on `main`, but it no longer
-> describes the *current default plate* on `develop`. For that, see the
-> `Changelog` block in `jig-plate.py`'s module docstring, which is kept
-> current on every change (iterative or not).
+| **Latest release** | 3.0.0 |
 
 ## Versioning
 
@@ -35,6 +27,131 @@ Each version's number appears in three places and they are kept in sync: the
 the mesh filenames, and the 80-byte binary STL header of each mesh (readable
 with `head -c 80 file.stl`). The generator's own filename (`jig-plate.py`)
 never changes -- it isn't one of the three.
+
+---
+
+## 3.0.0 — Lightening cutout reverted; derived-geometry validation
+
+Major release. Folds iterative changes 2.4.1–2.4.13 into a versioned
+release — six rounds of independent code review plus a full reversal of
+2.4.0's headline feature.
+
+### Removed
+
+- **Bottom-face lightening cutout, entirely.** 2.4.0's honeycomb was
+  built out further (cell-size CLI flag, a sparse-coffer alternative,
+  a thinner top skin — 2.4.1–2.4.4) and then fully reverted (2.4.5):
+  material and print-time reduction is handled in the slicer (infill)
+  instead of the model. `build_plate()` and the CLI no longer have
+  `honeycomb_*`/`coffer_*` parameters or `--lightening`/`--honeycomb-*`/
+  `--coffer-*` flags. The default plate is a solid slab again, matching
+  2.3.0/pre-2.3.1 — this release nets out to **no change** in the
+  lightening feature versus what shipped before 2.4.0, only churn in
+  between.
+
+### Added
+
+- **Derived-geometry validation.** `build_plate()` previously took
+  almost no input validation — most bad parameter combinations either
+  crashed with an unrelated matplotlib/trimesh error or silently built
+  a "watertight" plate with merged, overlapping, or paper-thin-walled
+  features. It now checks every mechanical feature (magnet bores,
+  stacking rib/groove) and the debossed branding as an axis-aligned
+  bounding box, verifying each stays within the plate — with a real
+  0.8mm minimum wall, not just non-overlap — on every axis it isn't
+  deliberately anchored to a face on, and doesn't come within 0.8mm of
+  any other feature. One mechanism now catches every reported "still
+  builds a broken plate" case, independent of which parameter
+  combination causes it, replacing a growing pile of bespoke
+  per-parameter checks that kept missing new ones every review round.
+- **Full X/Y/Z fit play in the stacking rib/groove.** `stack_play`
+  already widened the groove beyond the rib's own footprint in X and Y
+  (since 2.1.3/2.2.0); it now does the same for Z. The groove is cut
+  `stack_h + stack_play` deep instead of exactly `stack_h`, so the rib
+  no longer bottoms out with zero vertical clearance when two plates
+  stack. Framed against the actual mesh: the groove measured 1.6mm deep
+  before 2.4.6 (a stray overcut bug, not deliberate clearance), 1.5mm
+  from 2.4.6 through 2.4.12 (the overcut fixed, leaving true zero
+  clearance), and is 1.7mm now — net +0.1mm versus the pre-2.4.6/2.4.0
+  mesh, and the first time this clearance has been a deliberate choice.
+
+### Fixed
+
+- STL header truncation could silently corrupt the file for a header
+  ≥ 80 bytes (not reachable at current label/version lengths, but no
+  longer a landmine); both STL headers understated the plate's height
+  (9mm instead of the true 10.5mm with the stacking ribs).
+- Debossed labels containing a balanced `$...$` pair were silently
+  parsed as LaTeX mathtext instead of literal text; labels with
+  characters the debossed font has no glyph for produced a visible
+  placeholder "tofu" box instead of failing.
+- The isometric diagram's projection was mirrored (wrong winding); the
+  front elevation never drew the corner stacking ribs; the top-plan
+  view drew front/back magnet bores at the wrong size and, separately,
+  never drew the stacking grooves at all (only the ribs); the
+  magnet-bore-detail and stacking-joint panels each had a missing or
+  mis-hatched face edge at various points across this range.
+- Packaging: `rtree` and `pytest` were only in `requirements.txt`, not
+  `pyproject.toml` or the README's requirements list.
+- Documentation: several stale or inconsistent statements corrected —
+  `CLAUDE.md`'s release-tag format and a pre-2.0.0 filename reference,
+  `README.md`'s magnet-polarity wording (now distinguishes bore
+  *position* symmetry from polarity compatibility under a 180° plate
+  rotation, rather than reading as a contradiction) and its test-coupon
+  description (now notes it also carries the rightmost front push-fit
+  bore), and this file's now-resolved note about tracking a
+  since-reverted feature.
+
+### Test suite
+
+Grew from 0 tests at 2.4.0 to 86, added across all six review rounds
+and largely built against the actual mesh (ray-casting, `contains()`)
+rather than the input parameters, so a bug in the real boolean geometry
+can't hide behind metadata that merely echoes its inputs. Every check
+added this range was verified, by temporarily reintroducing the bug it
+targets, to actually fail — not just pass regardless of the underlying
+geometry.
+
+### Why a major bump
+
+Two things closing out together justified more than another minor
+release: the lightening cutout that was 2.4.0's whole reason for
+existing is now fully gone (net a no-op versus pre-2.4.0, but a
+significant round trip), and `build_plate()`'s validation contract
+changed fundamentally — from essentially none to a structural
+derived-geometry check that every future feature is expected to plug
+into. Together they mark a clean line for anyone building on this repo
+between "before" and "after," which a `2.5.0` wouldn't communicate.
+
+### Result
+
+**481.5 cm³, bounding box 246 × 218 × 10.5 mm — unchanged from 2.3.0,
+having gone by way of 2.4.0's 285.5 cm³ honeycomb and back.** Top face,
+all 12 magnet bores, and the corner stacking rib/groove system are
+geometrically untouched apart from the deliberate +0.1mm groove-depth
+clearance described above. Stack coupon unchanged at 8.09 cm³. Verified
+watertight (plate and coupon).
+
+### Validation
+
+Not yet printed under this name. The corner stacking joint this release
+depends on (2.2.0) was already printed and physically test-stacked with
+a confirmed good fit at the pre-3.0.0 depth; the deeper groove has not
+itself been physically validated, though it can only make the rib seat
+more easily, never obstruct it (see Added, above).
+
+### Files
+
+- `jig-plate.py`
+- `jig_plate_base.py`
+- `tests/test_jig_plate_base.py`
+- `README.md`
+- `CLAUDE.md`
+
+### Generated Files
+
+- `jig_plate_3.0.0.stl`
+- `jig_plate_3.0.0_stack_coupon.stl`
 
 ---
 
