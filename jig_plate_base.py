@@ -231,6 +231,13 @@ def build_plate(
     CHANGELOG.md only records major/minor releases, and its most recent
     entry describes a feature since removed -- see its own top-of-file note).
 
+    `stack_play` gives the rib/groove fit clearance on all three axes, but
+    not symmetrically: X and Y split it in half, `stack_play / 2` per side,
+    since the rib can land off-centre in the groove either way; Z applies
+    it in full, since the groove only has one closed side -- its floor --
+    for the rib to bottom out against, while the other "side" is the open
+    mouth at the plate's bottom face, which needs no clearance of its own.
+
     Returns a `PlateResult` (`.solid`: trimesh.Trimesh, `.geometry`:
     PlateGeometry). Pure -- no file I/O, no argv, no printing.
     """
@@ -434,6 +441,12 @@ def build_plate(
                  _mx + stack_len / 2, _my + stack_w / 2, plate_z + stack_h),
                 (0.0, 0.0, 0.0, plate_x, plate_y, None), set(),
             ))
+            # stack_play splits across X and Y (play/2 per side) since the
+            # rib can land off-centre in the groove on either axis -- but
+            # applies in full to Z, since the groove only has one closed
+            # side (its floor) for the rib to bottom out against; the
+            # other "side" is the open mouth at the plate's bottom face,
+            # which needs no clearance of its own.
             _features.append((
                 f"stacking groove @({_mx:.2f}, {_my:.2f})",
                 (_mx - (stack_len + stack_play) / 2,
@@ -563,6 +576,8 @@ def build_plate(
                     mx + stack_len / 2, my + stack_w / 2, plate_z + stack_h,
                 )
             )
+            # stack_play: half per side in X/Y, full in Z -- see the
+            # matching comment on the groove's feature-check box above.
             scribes.append(
                 bx(
                     mx - (stack_len + stack_play) / 2,

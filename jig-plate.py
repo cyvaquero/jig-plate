@@ -529,10 +529,27 @@ Changelog
   2.4.13 stack_play now also opens up the groove's depth (Z), not just
          its length and width (X/Y, since 2.1.3) -- the groove was cut
          exactly stack_h deep, the same height as the rib, so the rib
-         would bottom out in the groove with zero vertical clearance
-         between stacked plates even though X/Y already had 0.2mm of
-         play. Groove depth is now stack_h + stack_play (1.7mm at the
-         defaults, rib stays 1.5mm tall); the top-face rib is unchanged.
+         would bottom out in the groove with zero *deliberate* vertical
+         clearance even though X/Y already had 0.2mm of play. Groove
+         depth is now stack_h + stack_play; the rib itself is unchanged.
+         Framed against the actual mesh, not the documented figure: the
+         groove measured 1.6mm deep pre-2.4.6 (a stray +0.1mm overcut,
+         itself a bug, not deliberate clearance), 1.5mm from 2.4.6-2.4.12
+         (the overcut fixed, leaving true zero clearance), and is 1.7mm
+         now -- net +0.1mm versus the pre-2.4.6/2.4.0 mesh, and the first
+         time this clearance has been a deliberate design choice rather
+         than either a bug or its absence. Because a deeper groove can
+         only ever make the rib seat *more* easily (never obstruct it,
+         since nothing sits below the rib to block it going in further),
+         and the floor still leaves 481.5cm3 - a fraction of a cm3 of
+         material above the groove at every corner, this is a safe
+         direction to move even without a fresh print/stack test of this
+         exact depth. stack_play splits in half per side across X/Y (the
+         rib can land off-centre in the groove either way) but applies
+         in full to Z (the groove has only one closed side, its floor,
+         for the rib to bottom out against) -- documented in
+         build_plate()'s and this groove-feature check's own comments,
+         not just implied by the code.
          Also updated to match: the stacking-joint detail drawing's
          groove depth and "deep" dimension label, and the stack_play<0
          error message (now "narrower and shallower" instead of just
