@@ -600,6 +600,7 @@ def _faint(color, alpha):
 
 VERSION = "3.0.0"
 OUT_DIR = Path(__file__).resolve().parent / "output"
+IMG_DIR = Path(__file__).resolve().parent / "images"
 
 
 # stamp the 80-byte binary STL header so the version travels with the file
@@ -1315,7 +1316,6 @@ def main():
         np.round(stack_coupon.bounds[1] - stack_coupon.bounds[0], 2),
     )
 
-    IMG_DIR = Path(__file__).resolve().parent / "images"
     IMG_DIR.mkdir(exist_ok=True)
     _plate_diagram(IMG_DIR / f"jig_plate_{VERSION}_diagram.png", geom)
     _tech_top_plan(IMG_DIR / f"jig_plate_{VERSION}_tech_top.png", geom)
