@@ -37,7 +37,8 @@ diagrams) belongs in `jig-plate.py`.
 ```
 
 Writes STLs to `output/` and PNGs to `images/`, both gitignored. The script
-prints `watertight: True` for both meshes — if either is `False`, the
+prints `watertight: True` for the plate and `stack coupon: True` for the
+coupon (that flag is its watertightness) — if either is `False`, the
 geometry is broken and must not be released.
 
 To use the plate from another generator script instead of running the CLI:
@@ -78,7 +79,8 @@ regression result.
 
 - `output/jig_plate_<VERSION>.stl` and `output/jig_plate_<VERSION>_stack_coupon.stl`:
   binary STL whose 80-byte header starts `Jig plate <VERSION>` and is
-  NUL-padded. Both meshes must print `watertight: True`. Across a version
+  NUL-padded. Both meshes must report watertight (`watertight: True`,
+  `stack coupon: True`). Across a version
   bump, only the filename and header bytes may differ; compare the
   triangle data (bytes 80 onward) with `cmp`.
 - `images/*.png`: the isometric diagram and three technical-drawing sheets.
@@ -95,12 +97,27 @@ issue filing, release procedure) apply in full. Repo-specific points:
 - `feature/` and `bugfix/` branch off `develop` and reach it by PR; never
   commit directly to `develop` or `main`.
 - Releases: `release/x.y.z` off `develop`, merged to `main` and tagged
-  `vx.y.z`, then merged back to `develop` — only on explicit approval.
+  `x.y.z` (bare, no `v` prefix), then merged back to `develop` — only on
+  explicit approval. Tags through `v3.0.0` predate this rule and keep
+  their `v` prefix. There is no `RELEASING.md`; the account release
+  procedure applies as written.
+- The default branch is `main`, so PRs into `develop` or a release branch
+  don't auto-close issues. Close those by hand with
+  "Fixed in #PR (X.Y.Z)".
 - Commit identity: `Guy Heckman <1611555+cyvaquero@users.noreply.github.com>`.
   The sandbox can't read `~/.gitconfig`, so run git with
-  `GIT_CONFIG_GLOBAL` set and pass the identity explicitly.
-- The repo has no `code-review` or `severity:*` labels yet; create them
-  the first time an issue needs one.
+  `GIT_CONFIG_GLOBAL` pointing at a file that holds only the gh
+  credential helper, and pass the identity through the
+  `GIT_AUTHOR_*`/`GIT_COMMITTER_*` env vars.
+- Only `severity:low` exists among the review labels so far; create the
+  other `severity:*` labels and `code-review` the first time an issue
+  needs one.
+
+## Blind review scope
+
+There is no UI. The accessibility reviewer is limited to the docs
+(README images need text alternatives), the CLI output, and the
+generated drawings (legibility, use of color, contrast of the labels).
 
 ## Spelling
 

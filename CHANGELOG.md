@@ -46,6 +46,13 @@ coupon geometry are unchanged from 3.0.0 (triangle data byte-identical).
   spellings are tracked in #26.
 - `CLAUDE.md` now documents the verified output formats and the
   byte-for-byte regression check.
+- Release tags from now on are bare version numbers (`3.0.1`, not
+  `v3.0.1`); existing tags through `v3.0.0` keep their prefix.
+- `CLAUDE.md` notes that PRs into `develop` don't auto-close issues
+  (they are closed by hand), how to run git in the sandbox, which review
+  labels exist, and the accessibility scope of a blind review for this
+  UI-less repo, and correctly describes the coupon's watertight line
+  (`stack coupon: True`, not `watertight: True`).
 
 ## 3.0.0 — Lightening cutout reverted; derived-geometry validation
 
