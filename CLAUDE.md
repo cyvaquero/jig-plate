@@ -71,54 +71,8 @@ for the user and citing the issue numbers it addresses. Also keep the
 as many follow-up lines as needed to name what changed, why, and what was
 verified.
 
-## CHANGELOG consolidation at release
-
-When a release bumps the major or minor version, squash the iterative entries
-it covers into that version's section. The individual `x.y.N` headings are
-removed from the file; git history keeps them.
-
-Scope:
-- The squash covers every iterative entry from the previous major or minor
-  heading down to (not including) this one.
-- A bump with no feature content of its own still consolidates the range below
-  it. "Same features as <previous>" is not a reason to skip it.
-- Never touch a section at or below an already-consolidated heading.
-
-Backfill:
-- Before consolidating the current release, walk the file for earlier major or
-  minor headings whose range still has loose `x.y.N` entries under it. Squash
-  each, same rules, oldest first.
-- A heading is already consolidated when no `x.y.N` headings remain between it
-  and the next major or minor heading below. Don't re-process those.
-- Report what you backfilled, separately from the current release.
-
-How to squash:
-- Group under Keep a Changelog headings in this order: Added, Changed,
-  Deprecated, Removed, Fixed, Security. Omit empty groups.
-- One bullet per user-visible outcome, not per iterative entry or per PR.
-  Several entries that moved one feature forward collapse into the single
-  sentence describing where it landed.
-- Carry every issue number forward. A merged bullet cites all of them:
-  `(#12, #19, #23)`. Losing a reference is a defect.
-- Write the end state, not the journey. An add-then-fix pair inside the range
-  becomes the end state alone, since no user saw the intermediate.
-- Every security entry in the range gets a bullet. Security is not subject to
-  the merging and dropping rules above — under-reporting hardening in a public
-  repo is a defect.
-- Drop entries with no user-facing effect (test fixtures with no app change,
-  internal reorganization, docs-only corrections) unless they changed behavior,
-  defaults, or output.
-- Preserve the exact wording of any entry that already reads as a release-level
-  statement rather than rewriting it for style.
-- Keep measured figures (timings, percentages, dimensions) where the entry gave
-  them; they're the evidence the change was verified.
-
-Constraints:
-- Do not renumber, re-date, or reorder released sections.
-- Do not invent entries. If a referenced issue number has no matching iterative
-  entry, stop and ask rather than reconstructing from the diff.
-- Report per range: range covered, entries in, bullets out, and anything
-  dropped with the reason.
+At a major or minor release, consolidate `CHANGELOG.md` per the account
+rule "CHANGELOG consolidation at release".
 
 ## Verified output formats
 
