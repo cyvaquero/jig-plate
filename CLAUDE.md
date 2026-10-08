@@ -65,17 +65,35 @@ filenames and the 80-byte STL header (`head -c 80 file.stl`). Keep `version` in
   the generation-logic clause as the only one that matters.
 - **minor / major**: bump only when explicitly told to; zero the fields below it
 
-Every iterative change gets an entry in the `Changelog` block of the script
-docstring -- a short summary line, but with as many follow-up lines as needed
-to name what changed, why, and what was verified; these have run to several
-lines per entry in practice, not literally one line. `CHANGELOG.md` records
-**major and minor releases only** — do not add iterative entries there; they
-are folded into the next minor release.
+Every iterative change gets a `CHANGELOG.md` entry, newest first, saying
+what changed for the user and citing the issue numbers it addresses. Also
+keep the `Changelog` block of the script docstring: a short summary line
+plus as many follow-up lines as needed to name what changed, why, and what
+was verified. Follow-up fixes to an unmerged PR keep that PR's version and
+amend its entries rather than bumping again. Pre-release suffixes (`-rc`,
+`-beta`) only on request.
+
+A change that doesn't touch the generated model (docs, tests, drawings,
+`CLAUDE.md`) bumps nothing and gets no entry.
 
 ## Git
 
-git-flow: work on `develop`, releases via `release/x.y.z` merged to `main` and
-tagged `vx.y.z`, then merged back to `develop`.
+Strict git-flow; the account-level rules (branch naming, PRs, approvals,
+issue filing, release procedure) apply in full. Repo-specific points:
+
+- `feature/` and `bugfix/` branch off `develop` and reach it by PR; never
+  commit directly to `develop` or `main`.
+- Releases: `release/x.y.z` off `develop`, merged to `main` and tagged
+  `vx.y.z`, then merged back to `develop` — only on explicit approval.
+- Commit identity: `Guy Heckman <1611555+cyvaquero@users.noreply.github.com>`.
+  The sandbox can't read `~/.gitconfig`, so run git with
+  `GIT_CONFIG_GLOBAL` set and pass the identity explicitly.
+- The repo has no `code-review` or `severity:*` labels yet; create them
+  the first time an issue needs one.
+
+## Spelling
+
+American English in code, comments, docs and generated text.
 
 ## Drawings
 
@@ -97,7 +115,7 @@ changelog entry.
 ## Design constraints that must not be regressed
 
 - Magnet bores share X positions on the front and back faces and are symmetric
-  about the X centreline so plates mate either way round.
+  about the X centerline so plates mate either way round.
 - Plate must stay <= 246 mm in X (bed width plus purge-area clearance).
 - Corner stacking ribs (top face) and grooves (bottom face) are positioned
   off `plate_x`/`plate_y` only, never off pocket or blank layout, so any two
