@@ -146,12 +146,13 @@ issue filing, release procedure) apply in full. Repo-specific points:
 - `feature/` and `bugfix/` branch off `develop` and reach it by PR; never
   commit directly to `develop` or `main`.
 - Releases: `release/x.y.z` off `develop`, merged to `main` and tagged
-  `vx.y.z`, then merged back to `develop` — only on explicit approval.
-  There is no `RELEASING.md`; the account release procedure applies as
-  written.
+  `x.y.z` (bare, no `v` prefix), then merged back to `develop` — only on
+  explicit approval. Tags through `v3.0.0` predate this rule and keep
+  their `v` prefix. There is no `RELEASING.md`; the account release
+  procedure applies as written.
 - The default branch is `main`, so PRs into `develop` or a release branch
   don't auto-close issues. Close those by hand with
-  "Fixed in #PR (vX.Y.Z)".
+  "Fixed in #PR (X.Y.Z)".
 - Commit identity: `Guy Heckman <1611555+cyvaquero@users.noreply.github.com>`.
   The sandbox can't read `~/.gitconfig`, so run git with
   `GIT_CONFIG_GLOBAL` pointing at a file that holds only the gh
