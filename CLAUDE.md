@@ -57,24 +57,35 @@ Setup from scratch: `python3 -m venv .venv && .venv/bin/pip install -r requireme
 filenames and the 80-byte STL header (`head -c 80 file.stl`). Keep `version` in
 `pyproject.toml` in sync.
 
-- **iterative**: bump automatically on any change to the generated model —
-  a change to the plate's default output (geometry, dimensions, positions)
-  *or* a change to how the model is generated (parameters, CLI options,
-  generation logic), even when the default output itself is unaffected.
-  A default-output change is the clearer, more common case; do not treat
-  the generation-logic clause as the only one that matters.
-- **minor / major**: bump only when explicitly told to; zero the fields below it
+- **iterative**: bump automatically, once per change (not per commit), for
+  every change merged to `develop`: geometry, generation logic, CLI,
+  drawings, tests, docs, `CLAUDE.md`. Follow-up fixes to an unmerged PR keep
+  that PR's version and amend its entries rather than bumping again.
+- **minor / major**: bump only when explicitly told to; zero the fields below it.
+- Pre-release suffixes (`-rc`, `-beta`) only on request.
 
-Every iterative change gets a `CHANGELOG.md` entry, newest first, saying
-what changed for the user and citing the issue numbers it addresses. Also
-keep the `Changelog` block of the script docstring: a short summary line
-plus as many follow-up lines as needed to name what changed, why, and what
-was verified. Follow-up fixes to an unmerged PR keep that PR's version and
-amend its entries rather than bumping again. Pre-release suffixes (`-rc`,
-`-beta`) only on request.
+Every change gets a `CHANGELOG.md` entry, newest first, saying what changed
+for the user and citing the issue numbers it addresses. Also keep the
+`Changelog` block of the script docstring in step: a short summary line plus
+as many follow-up lines as needed to name what changed, why, and what was
+verified.
 
-A change that doesn't touch the generated model (docs, tests, drawings,
-`CLAUDE.md`) bumps nothing and gets no entry.
+## Verified output formats
+
+These must stay byte-for-byte identical unless a change is meant to alter
+them. Before and after any change, run the CLI and compare: report the
+regression result.
+
+- `output/jig_plate_<VERSION>.stl` and `output/jig_plate_<VERSION>_stack_coupon.stl`:
+  binary STL whose 80-byte header starts `Jig plate <VERSION>` and is
+  NUL-padded. Both meshes must print `watertight: True`. Across a version
+  bump, only the filename and header bytes may differ; compare the
+  triangle data (bytes 80 onward) with `cmp`.
+- `images/*.png`: the isometric diagram and three technical-drawing sheets.
+  Compare these visually; matplotlib PNGs aren't byte-stable across
+  library versions.
+- `build_plate()` return shape: `PlateResult(solid, geometry)` and the
+  `PlateGeometry` fields that blank-specific generators import.
 
 ## Git
 
@@ -100,8 +111,8 @@ American English in code, comments, docs and generated text.
 Alongside the mesh the script renders an isometric overview diagram and
 dimensioned technical drawings (top plan, front elevation, and a detail sheet
 carrying the magnet-bore and stacking-joint cross-sections). These are
-documentation, not geometry: a drawing-only change bumps nothing and gets no
-changelog entry.
+documentation, not geometry, but a drawing change still bumps the iterative
+version and gets a changelog entry like any other change.
 
 - No view hand-tunes `set_xlim`/`set_ylim`. Most call `ax.autoscale_view()`
   plus `ax.margins()` directly; the two-panel detail sheet (magnet-bore and

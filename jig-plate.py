@@ -577,6 +577,14 @@ Changelog
          drawing and STL-header bugs were fixed; the test suite grew
          from 0 to 86 tests, each one verified (by mutation testing) to
          actually catch what it claims to.
+  3.0.1  process/docs only, no geometry change: every change now bumps
+         the iterative version and gets a CHANGELOG.md entry (previously
+         model changes only / releases only); CLAUDE.md gains git-flow
+         branch+PR rules, the no-reply commit identity, an American
+         English convention (#26 tracks the leftover British spellings),
+         and a verified-output-formats section. Verified: plate and
+         coupon STL triangle data (bytes 80+) byte-identical to 3.0.0;
+         both meshes watertight; full test suite passes.
 """
 import argparse
 from pathlib import Path
@@ -598,7 +606,7 @@ def _faint(color, alpha):
     amount and made several section/body outlines nearly invisible."""
     return _to_rgba(color, alpha)
 
-VERSION = "3.0.0"
+VERSION = "3.0.1"
 OUT_DIR = Path(__file__).resolve().parent / "output"
 IMG_DIR = Path(__file__).resolve().parent / "images"
 
