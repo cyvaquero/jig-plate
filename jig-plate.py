@@ -582,8 +582,8 @@ Changelog
          model changes only / releases only); CLAUDE.md gains git-flow
          branch+PR rules, the no-reply commit identity, an American
          English convention (#26 tracks the leftover British spellings),
-         a verified-output-formats section, bare release tags (no
-         `v` prefix from 3.0.1 on), manual issue closing for PRs into
+         a verified-output-formats section, CHANGELOG consolidation
+         at major/minor releases, manual issue closing for PRs into
          develop, and the blind-review accessibility scope.
          Verified: plate and coupon STL triangle data (bytes 80+)
          byte-identical to 3.0.0; both meshes watertight; full test
