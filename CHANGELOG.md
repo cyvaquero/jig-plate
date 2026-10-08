@@ -17,10 +17,11 @@
 | `minor` | Bumped only on explicit command; zeroes iterative |
 | `iterative` | Incremented automatically on any change to the generated model: a change to the plate's default output (geometry, dimensions, positions) *or* a change to how the model is generated (parameters, CLI options, generation logic), even if the default output itself is unaffected. A default-output change is the clearer, more common case. |
 
-**This file records major and minor releases only,** newest first. Iterative
-changes are not given entries here; they are folded into the next minor release
-when one is cut. The running record of every iterative change is the `Changelog`
-block in the generator docstring, which is updated on every model change.
+Every change to the generated model gets an entry here, newest first,
+saying what changed for the user and citing issue numbers. Iterative entries
+up to 3.0.0 were recorded only in the `Changelog` block of the generator
+docstring and folded into the release entries below; from 3.0.1 on, each
+iterative change has its own entry here as well.
 
 Each version's number appears in three places and they are kept in sync: the
 `VERSION` constant in `jig-plate.py` (also mirrored in `pyproject.toml`),
