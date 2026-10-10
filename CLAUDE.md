@@ -112,9 +112,10 @@ PRs, approvals, issue filing, release procedure) apply in full. Repo-specific po
   `GIT_CONFIG_GLOBAL` pointing at a file that holds only the gh
   credential helper, and pass the identity through the
   `GIT_AUTHOR_*`/`GIT_COMMITTER_*` env vars.
-- Only `severity:low` exists among the review labels so far; create the
-  other `severity:*` labels, `code-review` and `deferred` (color
-  `BFD4F2`) the first time an issue needs one.
+- Create any missing review label (`severity:critical`, `severity:high`,
+  `deferred` with color `BFD4F2`, ...) the first time an issue needs it.
+  `code-review`, `security`, `severity:medium`, `severity:low` and
+  `severity:info` exist.
 
 ## Blind review scope
 
