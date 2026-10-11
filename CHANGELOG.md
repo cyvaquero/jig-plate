@@ -22,8 +22,9 @@ the user and citing issue numbers. Iterative entries
 up to 3.0.0 were recorded only in the `Changelog` block of the generator
 docstring and folded into the release entries below; from 3.0.1 on, each
 iterative change has its own entry here as well. When a release bumps
-the major or minor version, the iterative entries it covers are squashed
-into that release's section; git history keeps the originals.
+the major or minor version (at its merge into `main`), the iterative
+entries it covers are squashed into that release's section; git history
+keeps the originals.
 
 Each version's number appears in three places and they are kept in sync: the
 `VERSION` constant in `jig-plate.py` (also mirrored in `pyproject.toml`),
@@ -48,8 +49,9 @@ coupon geometry are unchanged from 3.0.0 (triangle data byte-identical).
   spellings are tracked in #26.
 - `CLAUDE.md` now documents the verified output formats and the
   byte-for-byte regression check.
-- At each major or minor release, the iterative entries it covers are
-  squashed into that release's section in this file.
+- A major or minor release keeps its iterative version through the release
+  branch; it becomes `X.Y.0` only at the merge into `main`, when the
+  iterative entries it covers are squashed into that release's section.
 - Release tags from now on are bare version numbers (`3.0.1`, not
   `v3.0.1`); existing tags through `v3.0.0` keep their prefix.
 - `CLAUDE.md` notes that PRs into `develop` don't auto-close issues

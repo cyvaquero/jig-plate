@@ -63,6 +63,9 @@ filenames and the 80-byte STL header (`head -c 80 file.stl`). Keep `version` in
   drawings, tests, docs, `CLAUDE.md`. Follow-up fixes to an unmerged PR keep
   that PR's version and amend its entries rather than bumping again.
 - **minor / major**: bump only when explicitly told to; zero the fields below it.
+  The bump to `X.Y.0` happens on the release branch just before its merge into
+  `main`, not at the cut. Until then release-branch builds carry the iterative
+  version in their STL filenames and headers.
 - Pre-release suffixes (`-rc`, `-beta`) only on request.
 
 Every change gets a `CHANGELOG.md` entry, newest first, saying what changed
@@ -71,8 +74,8 @@ for the user and citing the issue numbers it addresses. Also keep the
 as many follow-up lines as needed to name what changed, why, and what was
 verified.
 
-At a major or minor release, consolidate `CHANGELOG.md` per the global
-rule "CHANGELOG consolidation at release" in `~/.claude/CLAUDE.md`.
+With that `X.Y.0` bump, consolidate `CHANGELOG.md` per the global rule
+"CHANGELOG consolidation at release" in `~/.claude/CLAUDE.md`.
 
 ## Verified output formats
 
