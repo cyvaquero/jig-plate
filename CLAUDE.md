@@ -1,34 +1,29 @@
 # jig-plate
 
-Purpose: A 3D generator for a stackable laser jig plate with magnet pockets
-for marrying multiple plates and maintaining position on the laser bed. This
-is the base plate to which pockets are added for various types and sizes of
-blanks.
+Parametric generator for the **base plate** of a stackable laser jig: magnet
+bores for marrying plates and holding position on the laser bed, plus a
+corner stacking rib/groove system. No blank-specific pockets, lips or vents;
+those are added on top of this base by blank-specific scripts.
+`jig-plate.py` builds the plate and a corner test coupon (for the stacking
+joint) as binary STL with trimesh and the manifold boolean engine, and
+renders diagrams and technical drawings with matplotlib.
 
-Parametric generator for the **base plate only** — no blank-specific pockets,
-lips, or vents. `jig-plate.py` builds the plate and a corner test coupon
-(for the stacking rib/groove joint) as binary STL using trimesh with the
-manifold boolean engine, and renders diagrams and technical drawings with
-matplotlib.
-
-Only what is blank-agnostic lives here — magnet bores and the corner
-stacking rib/groove system — so any pocket layout for any blank can be
-built on top of this base without touching this geometry.
+The global rules in `~/.claude/CLAUDE.md` and the `release` and
+`blind-review` skills apply in full; this file holds only what is specific
+to this repo.
 
 ## Two files, two roles
 
 - `jig_plate_base.py` — the importable library. `build_plate()` returns a
   `PlateResult` (`.solid`: the trimesh solid, `.geometry`: a `PlateGeometry`
   record of every magnet-bore and stacking-rib/groove position) with no
-  file I/O, no argv, no printing. A blank-specific generator script imports
-  this directly: `from jig_plate_base import build_plate`.
-- `jig-plate.py` — the CLI entry point (argument parsing, STL export,
-  diagrams). A hyphenated filename can't be `import`ed, which is exactly
-  why the reusable geometry doesn't live here.
+  file I/O, no argv, no printing.
+- `jig-plate.py` — the CLI entry point (argparse, STL export, diagrams). A
+  hyphenated filename can't be `import`ed, which is why the reusable
+  geometry doesn't live here.
 
-Keep this split: geometry and derived positions belong in
-`jig_plate_base.py`; anything CLI-only (argparse, file writing, matplotlib
-diagrams) belongs in `jig-plate.py`.
+Geometry and derived positions belong in `jig_plate_base.py`; anything
+CLI-only belongs in `jig-plate.py`.
 
 ## Run
 
@@ -38,10 +33,10 @@ diagrams) belongs in `jig-plate.py`.
 
 Writes STLs to `output/` and PNGs to `images/`, both gitignored. The script
 prints `watertight: True` for the plate and `stack coupon: True` for the
-coupon (that flag is its watertightness) — if either is `False`, the
+coupon (that flag is its watertightness). If either is `False`, the
 geometry is broken and must not be released.
 
-To use the plate from another generator script instead of running the CLI:
+From another generator script:
 
 ```python
 from jig_plate_base import build_plate
@@ -50,80 +45,45 @@ result.solid             # trimesh.Trimesh
 result.geometry.mag_xs   # reserved zones to lay pockets out around
 ```
 
-Setup from scratch: `python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`
+Setup: `python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`
 
-## Versioning — `major.minor.iterative`
+## Versioning
 
-`VERSION` in the script is the single source of truth. It drives the output
-filenames and the 80-byte STL header (`head -c 80 file.stl`). Keep `version` in
-`pyproject.toml` in sync.
+`VERSION` in `jig-plate.py` is the single source of truth; keep `version` in
+`pyproject.toml` in sync. It drives the output filenames and the 80-byte STL
+header (`head -c 80 file.stl`), so release-branch builds carry the iterative
+version until the `X.Y.0` bump just before the merge into `main`.
 
-- **iterative**: bump automatically, once per change (not per commit), for
-  every change merged to `develop`: geometry, generation logic, CLI,
-  drawings, tests, docs, `CLAUDE.md`. Follow-up fixes to an unmerged PR keep
-  that PR's version and amend its entries rather than bumping again.
-- **minor / major**: bump only when explicitly told to; zero the fields below it.
-  The bump to `X.Y.0` happens on the release branch just before its merge into
-  `main`, not at the cut. Until then release-branch builds carry the iterative
-  version in their STL filenames and headers.
-- Pre-release suffixes (`-rc`, `-beta`) only on request.
-
-Every change gets a `CHANGELOG.md` entry, newest first, saying what changed
-for the user and citing the issue numbers it addresses. Also keep the
-`Changelog` block of the script docstring in step: a short summary line plus
-as many follow-up lines as needed to name what changed, why, and what was
-verified.
-
-With that `X.Y.0` bump, consolidate `CHANGELOG.md` per the `release`
-skill.
+Besides the `CHANGELOG.md` entry, keep the `Changelog` block of the script
+docstring in step: a summary line plus follow-up lines naming what changed,
+why, and what was verified.
 
 ## Verified output formats
 
-These must stay byte-for-byte identical unless a change is meant to alter
-them. Before and after any change, run the CLI and compare: report the
-regression result.
+These stay byte-for-byte identical unless a change is meant to alter them.
+Run the CLI before and after every change and report the comparison.
 
 - `output/jig_plate_<VERSION>.stl` and `output/jig_plate_<VERSION>_stack_coupon.stl`:
   binary STL whose 80-byte header starts `Jig plate <VERSION>` and is
-  NUL-padded. Both meshes must report watertight (`watertight: True`,
-  `stack coupon: True`). Across a version
-  bump, only the filename and header bytes may differ; compare the
-  triangle data (bytes 80 onward) with `cmp`.
+  NUL-padded; both meshes report watertight. Across a version bump only the
+  filename and header may differ: compare bytes 80 onward with `cmp`.
 - `images/*.png`: the isometric diagram and three technical-drawing sheets.
-  Compare these visually; matplotlib PNGs aren't byte-stable across
-  library versions.
+  Compare visually; matplotlib PNGs aren't byte-stable across versions.
 - `build_plate()` return shape: `PlateResult(solid, geometry)` and the
   `PlateGeometry` fields that blank-specific generators import.
 
 ## Git
 
-Strict git-flow; the global rules in `~/.claude/CLAUDE.md` (branch naming,
-PRs, approvals, issue filing) and the `release` skill apply in full. Repo-specific points:
-
-- `feature/` and `bugfix/` branch off `develop` and reach it by PR; never
-  commit directly to `develop` or `main`.
-- Releases: `release/x.y.z` off `develop`, merged to `main` and tagged
-  `x.y.z` (bare, no `v` prefix), then merged back to `develop` — only on
-  explicit approval. Tags through `v3.0.0` predate this rule and keep
-  their `v` prefix. There is no `RELEASING.md`; the `release` skill
-  applies as written.
+- Tags are bare `x.y.z`. Older tags (`v0.1.0` to `v3.0.0`) carry a `v`
+  prefix and stay as they are. There is no `RELEASING.md`.
 - The default branch is `main`, so PRs into `develop` or a release branch
-  don't auto-close issues. Close those by hand with
-  "Fixed in #PR (X.Y.Z)".
-- Commit identity: `Guy Heckman <1611555+cyvaquero@users.noreply.github.com>`.
-  Never read `~/.gitconfig`; run git with `GIT_CONFIG_GLOBAL` pointing at
-  a scratch file holding only the gh credential helper and a `[user]`
-  section with this identity.
-- Create any missing review label (`severity:critical`, `severity:high`,
-  `deferred` with color `BFD4F2`, ...) the first time an issue needs it.
-  `code-review`, `security`, `severity:medium`, `severity:low` and
-  `severity:info` exist.
+  don't auto-close issues; close those by hand.
 
 ## Blind review scope
 
-For the `blind-review` skill: there is no UI. The accessibility reviewer is limited to the docs
-(README images need text alternatives), the CLI output, and the
-generated drawings (legibility, use of color, contrast of the labels).
+There is no UI. The accessibility reviewer covers the docs (README images
+need text alternatives), the CLI output, and the generated drawings
+(legibility, use of color, label contrast).
 
 ## Spelling
 
@@ -131,30 +91,26 @@ American English in code, comments, docs and generated text.
 
 ## Drawings
 
-Alongside the mesh the script renders an isometric overview diagram and
-dimensioned technical drawings (top plan, front elevation, and a detail sheet
-carrying the magnet-bore and stacking-joint cross-sections). These are
-documentation, not geometry, but a drawing change still bumps the iterative
-version and gets a changelog entry like any other change.
+An isometric overview diagram and dimensioned technical drawings (top plan,
+front elevation, and a detail sheet with the magnet-bore and stacking-joint
+cross-sections). They are documentation, not geometry, but a drawing change
+is versioned like any other.
 
 - No view hand-tunes `set_xlim`/`set_ylim`. Most call `ax.autoscale_view()`
-  plus `ax.margins()` directly; the two-panel detail sheet (magnet-bore and
-  stacking-joint cross-sections, sharing one figure) uses `_fit_view` instead,
-  since autoscaling each panel independently would give them different
-  scales. Dimension labels are `ax.text`, which never reaches `dataLim`, so
-  plain autoscaling crops them — that is what `_fit_view` corrects for, and
-  why the margins the other views pass to `ax.margins()` need to be generous
-  enough to leave room for their own dimension text.
+  plus `ax.margins()`; the two-panel detail sheet uses `_fit_view` so both
+  panels share one scale. Dimension labels are `ax.text`, which never
+  reaches `dataLim`, so plain autoscaling crops them: `_fit_view` corrects
+  for that, and the other views' `ax.margins()` must leave room for their
+  own dimension text.
 
 ## Design constraints that must not be regressed
 
-- Magnet bores share X positions on the front and back faces and are symmetric
-  about the X centerline so plates mate either way round.
+- Magnet bores share X positions on the front and back faces and are
+  symmetric about the X centerline so plates mate either way round.
 - Plate must stay <= 246 mm in X (bed width plus purge-area clearance).
 - Corner stacking ribs (top face) and grooves (bottom face) are positioned
   off `plate_x`/`plate_y` only, never off pocket or blank layout, so any two
-  plates sharing this outer footprint stack together regardless of what
-  pockets get added to each later.
-- Nothing in this script may depend on a specific blank's dimensions. If a
-  change references a card, part, or pocket size, it belongs in a
-  blank-specific script layered on top of this one, not here.
+  plates sharing this outer footprint stack together.
+- Nothing here may depend on a specific blank's dimensions. A change that
+  references a card, part or pocket size belongs in a blank-specific script
+  layered on top of this one.
