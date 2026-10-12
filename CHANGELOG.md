@@ -15,7 +15,7 @@
 |---|---|
 | `major` | Bumped only on explicit command; zeroes minor and iterative |
 | `minor` | Bumped only on explicit command; zeroes iterative |
-| `iterative` | Incremented automatically, once per change (not per commit), for every change merged to `develop`: geometry, generation logic, CLI, drawings, tests or docs |
+| `iterative` | Incremented automatically, once per merged branch (not per issue or commit), for every branch merged to `develop`: geometry, generation logic, CLI, drawings, tests or docs |
 
 Every change gets an entry here, newest first, saying what changed for
 the user and citing issue numbers. Iterative entries
@@ -40,9 +40,9 @@ Iterative (unreleased). Documentation and process only; the plate and
 coupon geometry are unchanged from 3.0.0 (triangle data byte-identical).
 
 ### Changed
-- Every change now bumps the iterative version and gets an entry in this
-  file. Until now, only model changes bumped the version and only releases
-  were recorded here.
+- Every merged branch now bumps the iterative version and gets an entry
+  in this file. Until now, only model changes bumped the version and only
+  releases were recorded here.
 - Development uses `feature/`/`bugfix/` branches with PRs into `develop`,
   and commits use the GitHub no-reply identity.
 - American English is the spelling convention; the remaining British
@@ -54,11 +54,12 @@ coupon geometry are unchanged from 3.0.0 (triangle data byte-identical).
   iterative entries it covers are squashed into that release's section.
 - Release tags from now on are bare version numbers (`3.0.1`, not
   `v3.0.1`); existing tags through `v3.0.0` keep their prefix.
-- `CLAUDE.md` notes that PRs into `develop` don't auto-close issues
-  (they are closed by hand), how to run git in the sandbox, which review
-  labels exist, and the accessibility scope of a blind review for this
-  UI-less repo, and correctly describes the coupon's watertight line
-  (`stack coupon: True`, not `watertight: True`).
+- `CLAUDE.md` holds only what is specific to this repo (the global rules
+  and the `release` and `blind-review` skills cover the rest), stays under
+  120 lines, notes that PRs into `develop` don't auto-close issues, sets
+  the accessibility scope of a blind review for this UI-less repo, and
+  correctly describes the coupon's watertight line (`stack coupon: True`,
+  not `watertight: True`).
 
 ## 3.0.0 — Lightening cutout reverted; derived-geometry validation
 
