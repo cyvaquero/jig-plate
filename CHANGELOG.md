@@ -15,12 +15,16 @@
 |---|---|
 | `major` | Bumped only on explicit command; zeroes minor and iterative |
 | `minor` | Bumped only on explicit command; zeroes iterative |
-| `iterative` | Incremented automatically on any change to the generated model: a change to the plate's default output (geometry, dimensions, positions) *or* a change to how the model is generated (parameters, CLI options, generation logic), even if the default output itself is unaffected. A default-output change is the clearer, more common case. |
+| `iterative` | Incremented automatically, once per merged branch (not per issue or commit), for every branch merged to `develop`: geometry, generation logic, CLI, drawings, tests or docs |
 
-**This file records major and minor releases only,** newest first. Iterative
-changes are not given entries here; they are folded into the next minor release
-when one is cut. The running record of every iterative change is the `Changelog`
-block in the generator docstring, which is updated on every model change.
+Every change gets an entry here, newest first, saying what changed for
+the user and citing issue numbers. Iterative entries
+up to 3.0.0 were recorded only in the `Changelog` block of the generator
+docstring and folded into the release entries below; from 3.0.1 on, each
+iterative change has its own entry here as well. When a release bumps
+the major or minor version (at its merge into `main`), the iterative
+entries it covers are squashed into that release's section; git history
+keeps the originals.
 
 Each version's number appears in three places and they are kept in sync: the
 `VERSION` constant in `jig-plate.py` (also mirrored in `pyproject.toml`),
@@ -29,6 +33,33 @@ with `head -c 80 file.stl`). The generator's own filename (`jig-plate.py`)
 never changes -- it isn't one of the three.
 
 ---
+
+## 3.0.1 — Working rules aligned with account policy
+
+Iterative (unreleased). Documentation and process only; the plate and
+coupon geometry are unchanged from 3.0.0 (triangle data byte-identical).
+
+### Changed
+- Every merged branch now bumps the iterative version and gets an entry
+  in this file. Until now, only model changes bumped the version and only
+  releases were recorded here.
+- Development uses `feature/`/`bugfix/` branches with PRs into `develop`,
+  and commits use the GitHub no-reply identity.
+- American English is the spelling convention; the remaining British
+  spellings are tracked in #26.
+- `CLAUDE.md` now documents the verified output formats and the
+  byte-for-byte regression check.
+- A major or minor release keeps its iterative version through the release
+  branch; it becomes `X.Y.0` only at the merge into `main`, when the
+  iterative entries it covers are squashed into that release's section.
+- Release tags from now on are bare version numbers (`3.0.1`, not
+  `v3.0.1`); existing tags through `v3.0.0` keep their prefix.
+- `CLAUDE.md` holds only what is specific to this repo (the global rules
+  and the `release` and `blind-review` skills cover the rest), stays under
+  120 lines, notes that PRs into `develop` don't auto-close issues, sets
+  the accessibility scope of a blind review for this UI-less repo, and
+  correctly describes the coupon's watertight line (`stack coupon: True`,
+  not `watertight: True`).
 
 ## 3.0.0 — Lightening cutout reverted; derived-geometry validation
 
