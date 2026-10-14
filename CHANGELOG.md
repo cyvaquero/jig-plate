@@ -34,6 +34,16 @@ never changes -- it isn't one of the three.
 
 ---
 
+## 3.0.2 — Tag format left to the global rules
+
+Iterative (unreleased). Documentation only; the plate and coupon geometry
+are unchanged from 3.0.1 (triangle data byte-identical).
+
+### Changed
+- `CLAUDE.md` no longer restates the release-tag format, so hotfix tags
+  (`x.y.z.h`) aren't contradicted; the global rules set it. It still notes
+  that tags up to `v3.0.0` keep their `v` prefix.
+
 ## 3.0.1 — Working rules aligned with account policy
 
 Iterative (unreleased). Documentation and process only; the plate and
