@@ -633,6 +633,16 @@ Changelog
          `v` prefix stays. Verified: plate and coupon STL triangle data
          (bytes 80+) byte-identical to 3.0.6; both meshes watertight;
          full test suite passes.
+  3.0.8  packaging only, no geometry change: pyproject.toml gains a
+         [build-system] table (setuptools>=61, the first release with
+         PEP 621 support) and [tool.setuptools] py-modules =
+         ["jig_plate_base"], so `pip install .`, `pip install -e .` and
+         `.[test]` work on the flat layout even with output/ and images/
+         present; they previously failed with "Multiple top-level packages
+         discovered". Verified in a fresh 3.14 venv: all three installs
+         succeed and `import jig_plate_base` works from outside the repo;
+         STLs (bytes 80+) byte-identical to 3.0.7; both meshes watertight;
+         full test suite passes.
 """
 import argparse
 import sys
@@ -655,7 +665,7 @@ def _faint(color, alpha):
     amount and made several section/body outlines nearly invisible."""
     return _to_rgba(color, alpha)
 
-VERSION = "3.0.7"
+VERSION = "3.0.8"
 OUT_DIR = Path(__file__).resolve().parent / "output"
 IMG_DIR = Path(__file__).resolve().parent / "images"
 
