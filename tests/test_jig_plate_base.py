@@ -584,6 +584,21 @@ class TestGeometryPositions:
         assert geom.bottom_mag_inset_x == 12.0
         assert geom.bottom_mag_ys == (5.0, 213.0)
 
+    def test_top_branding_bounds_cover_the_debossed_logo_in_the_front_band(self):
+        result = build_plate()
+        g = result.geometry
+        x0, y0, x1, y1 = g.top_branding_bounds
+        assert 0 < y0 < y1 <= g.front_margin
+        # centred on the plate in X (logo + label as one block)
+        assert (x0 + x1) / 2 == pytest.approx(g.plate_x / 2, abs=1.0)
+        # the logo dome's centre (3 mm in from the block's left edge, just
+        # above the band's centreline) is debossed: empty just under the top
+        probe = (x0 + 3.0, g.front_margin / 2 + 1.5, g.plate_z - g.deboss_d / 2)
+        assert not result.solid.contains([probe])[0]
+        # and the plate is solid just outside the footprint
+        outside = (x0 - 2.0, g.front_margin / 2, g.plate_z - g.deboss_d / 2)
+        assert result.solid.contains([outside])[0]
+
 
 class TestPurity:
     """build_plate() must have no side effects -- no file I/O, no argv."""
