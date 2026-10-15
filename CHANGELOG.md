@@ -34,6 +34,20 @@ never changes -- it isn't one of the three.
 
 ---
 
+## 3.0.5 — Pinned, hashed dependency lock
+
+Iterative (unreleased). Packaging and docs only; the plate and coupon
+geometry are unchanged from 3.0.1 (triangle data byte-identical).
+
+### Changed
+- Added `requirements.lock`, a pinned and hashed lock of every dependency
+  (generated with `pip-compile --generate-hashes` from the loose
+  `requirements.txt`). The documented setup installs from it with
+  `--require-hashes`, so a fresh venv reproduces the same meshes instead
+  of picking up whatever versions are current (#16).
+- The setup steps in the README and `CLAUDE.md` use `python3.14` and the
+  lock; the README explains how to regenerate it.
+
 ## 3.0.1 — Working rules aligned with account policy
 
 Iterative (unreleased). Documentation and process only; the plate and

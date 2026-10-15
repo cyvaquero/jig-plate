@@ -45,7 +45,9 @@ result.solid             # trimesh.Trimesh
 result.geometry.mag_xs   # reserved zones to lay pockets out around
 ```
 
-Setup: `python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`
+Setup: `python3.14 -m venv .venv && .venv/bin/pip install --require-hashes -r requirements.lock`
+(`requirements.txt` is the loose input; regenerate the lock with
+`pip-compile --generate-hashes --output-file requirements.lock requirements.txt`.)
 
 ## Versioning
 
