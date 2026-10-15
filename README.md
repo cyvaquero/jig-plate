@@ -51,7 +51,8 @@ below.
 - [trimesh](https://trimesh.org/) with the
   [Manifold](https://github.com/elalish/manifold) boolean engine
 - NumPy, Shapely, Matplotlib
-- pytest, rtree (for the test suite -- see [Tests](#tests))
+- pytest, rtree (test extra only: `pip install -e ".[test]"`, or via
+  `requirements.lock`; see [Tests](#tests))
 
 ```bash
 python3.14 -m venv .venv
@@ -91,13 +92,17 @@ Generates into `output/`:
 And into `images/`:
 
 - `jig_plate_<version>_diagram.png` — isometric plate overview
-- `jig_plate_<version>_tech_top.png` — dimensioned top plan view
-- `jig_plate_<version>_tech_front.png` — front elevation
+- `jig_plate_<version>_tech_top.png` — dimensioned top plan view, including
+  the debossed branding footprint
+- `jig_plate_<version>_tech_front.png` — front elevation (hidden bottom bores
+  and grooves dashed)
 - `jig_plate_<version>_tech_detail.png` — magnet-bore and stacking-joint
   detail sheet
 
 The script prints watertight status, volume, bounding box, and face count for
-both meshes. Both must report `watertight: True` or the geometry is broken.
+both meshes. Both must report `watertight: True` or the geometry is broken;
+if either does not, the files are still written for inspection but the script
+prints an error to stderr and exits with status 1.
 
 ## Tests
 

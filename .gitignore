@@ -4,7 +4,6 @@
 ## jig-plate Patterns
 /output/
 /images/
-*.stl
 
 ## Python Patterns
 .venv/
