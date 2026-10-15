@@ -21,10 +21,6 @@ BBOX = (246.0, 218.0, 10.5)
 TOL = 1.0  # mm3, generous enough for boolean-engine tessellation noise
 
 
-def _volume(result):
-    return result.solid.volume
-
-
 def _cavity_center_x(solid, y, z, near_x):
     """X centre of the cavity bracketing `near_x`, measured on the mesh
     by ray-casting along +X at a fixed (y, z) and finding the pair of
@@ -87,7 +83,7 @@ class TestDefaultPlate:
         assert build_plate().solid.is_watertight
 
     def test_volume(self):
-        assert _volume(build_plate()) == pytest.approx(DEFAULT_VOLUME_MM3, abs=TOL)
+        assert build_plate().solid.volume == pytest.approx(DEFAULT_VOLUME_MM3, abs=TOL)
 
     def test_bounding_box(self):
         # also the CLAUDE.md constraint that plate_x <= 246 mm (bed width
@@ -235,6 +231,9 @@ class TestParameterValidation:
         (dict(deboss_d=9.0), "top or bottom face"),  # cuts clean through the top
         (dict(deboss_d=20.0), "top or bottom face"),
         (dict(label="W" * 30, deboss_d=2.0), "comes within"),  # reaches a bore
+        # fits the top face and the side-face Z range, so only the left-face
+        # branding box (its end reaches the front-left groove) rejects it
+        (dict(label="M" * 50), "left-face branding"),
     ])
     def test_rejected(self, kwargs, match):
         with pytest.raises(ValueError, match=match):
@@ -272,6 +271,19 @@ class TestMeshGeometry:
         assert not any(solid.contains(front_pts))
         assert not any(solid.contains(back_pts))
 
+    def test_default_magnet_bores_are_at_the_pinned_x_positions(self):
+        # literals, not g.mag_xs: changing the default mag_inset_x must
+        # fail here, not silently move the record and the mesh together
+        result = build_plate()
+        pinned = (30.75, 92.25, 153.75, 215.25)
+        assert result.geometry.mag_xs == pinned
+        z = result.geometry.plate_z / 2
+        for x in pinned:
+            for y in (0.5, result.geometry.plate_y - 0.5):
+                assert not result.solid.contains([(x, y, z)])[0]
+        # solid between the bores, so the probe isn't just always empty
+        assert result.solid.contains([(61.5, 0.5, z)])[0]
+
     def test_front_back_magnet_bores_share_x_position_on_the_mesh(self):
         # CLAUDE.md: "front and back bores share X positions ... so
         # plates mate either way round." A contains()-at-centre probe
@@ -279,8 +291,8 @@ class TestMeshGeometry:
         # so even a 2mm X shift of one side still lands the probe point
         # inside the (moved) cavity. Measure each side's actual cavity
         # centre independently via ray-casting instead, and compare them
-        # to each other -- not to the PlateGeometry.mag_xs list both
-        # sides are naively built from in the naive version above.
+        # to each other and to the nominal X, not just to the
+        # PlateGeometry.mag_xs tuple both sides are built from.
         result = build_plate()
         g, solid = result.geometry, result.solid
         z = g.plate_z / 2
