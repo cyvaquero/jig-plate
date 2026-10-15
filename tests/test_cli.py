@@ -129,3 +129,41 @@ class TestMain:
         err = capsys.readouterr().err
         assert "usage:" in err
         assert re.search(r"label.*empty", err, re.IGNORECASE)
+
+    @pytest.mark.parametrize("broken", ["plate", "stack coupon"])
+    def test_non_watertight_mesh_still_writes_files_but_exits_nonzero(
+        self, _redirected_dirs, monkeypatch, capsys, broken
+    ):
+        import trimesh
+
+        out_dir, _ = _redirected_dirs
+        monkeypatch.setattr(sys, "argv", ["jig-plate.py"])
+        real_stamp = jig_plate_cli.stamp
+        real_prop = trimesh.Trimesh.is_watertight
+
+        def _break_after_booleans(path, text):
+            # the booleans reject a non-watertight input, so flip the
+            # property only once the coupon has been built (its stamp is
+            # the last step before main() checks both meshes). The plate
+            # is the only mesh over 100 cm3; the coupon is ~8 cm3.
+            real_stamp(path, text)
+            if "stack_coupon" in Path(path).name:
+                monkeypatch.setattr(
+                    trimesh.Trimesh, "is_watertight",
+                    property(lambda self: (
+                        False if (self.volume > 100_000) == (broken == "plate")
+                        else real_prop.fget(self)
+                    )),
+                )
+
+        monkeypatch.setattr(jig_plate_cli, "stamp", _break_after_booleans)
+
+        with pytest.raises(SystemExit) as exc_info:
+            jig_plate_cli.main()
+
+        assert exc_info.value.code == 1
+        err = capsys.readouterr().err
+        assert f"{broken} mesh not watertight" in err
+        version = jig_plate_cli.VERSION
+        assert (out_dir / f"jig_plate_{version}.stl").exists()
+        assert (out_dir / f"jig_plate_{version}_stack_coupon.stl").exists()
