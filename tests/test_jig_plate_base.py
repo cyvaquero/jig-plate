@@ -22,11 +22,11 @@ TOL = 1.0  # mm3, generous enough for boolean-engine tessellation noise
 
 
 def _cavity_center_x(solid, y, z, near_x):
-    """X centre of the cavity bracketing `near_x`, measured on the mesh
+    """X center of the cavity bracketing `near_x`, measured on the mesh
     by ray-casting along +X at a fixed (y, z) and finding the pair of
     solid/cavity crossings nearest `near_x`. Precise (not a radius-wide
     contains() probe), so a several-mm shift in the real cut is caught
-    even though a naive centre-point probe would still land inside it."""
+    even though a naive center-point probe would still land inside it."""
     origin = [[-1.0, y, z]]
     direction = [[1.0, 0.0, 0.0]]
     locs, _, _ = solid.ray.intersects_location(origin, direction)
@@ -286,11 +286,11 @@ class TestMeshGeometry:
 
     def test_front_back_magnet_bores_share_x_position_on_the_mesh(self):
         # CLAUDE.md: "front and back bores share X positions ... so
-        # plates mate either way round." A contains()-at-centre probe
+        # plates mate either way round." A contains()-at-center probe
         # can't catch a real regression here: the bore radius is 3.05mm,
         # so even a 2mm X shift of one side still lands the probe point
         # inside the (moved) cavity. Measure each side's actual cavity
-        # centre independently via ray-casting instead, and compare them
+        # center independently via ray-casting instead, and compare them
         # to each other and to the nominal X, not just to the
         # PlateGeometry.mag_xs tuple both sides are built from.
         result = build_plate()
@@ -384,7 +384,7 @@ class TestMeshGeometry:
         # probe just inside the groove's Y edge nearest the bore -- the
         # narrowest point of the wall, since the bore is a circle whose X
         # extent (at a given Y) widens as Y approaches the bore's own
-        # centre, and the groove's Y range doesn't reach that centre.
+        # center, and the groove's Y range doesn't reach that center.
         y_edge = (g.stack_w + g.stack_play) / 2 - 0.01
         y = stack_y + (y_edge if bore_y > stack_y else -y_edge)
         z = 0.75  # inside both the groove's Z range [0, stack_h + stack_play]
@@ -423,7 +423,7 @@ class TestMeshGeometry:
             assert back_depth == pytest.approx(front_depth, abs=1e-3)
 
     def test_front_back_magnet_bore_height_matches(self):
-        # both push-fit bores should be vertically centred at the same Z
+        # both push-fit bores should be vertically centered at the same Z
         # (plate_z / 2) -- measured on the mesh via a vertical ray through
         # each bore, not read back from geometry fields.
         result = build_plate()
@@ -557,10 +557,10 @@ class TestGeometryPositions:
     @pytest.mark.parametrize("mag_count_x", [2, 3, 4, 5])
     def test_magnet_bores_symmetric_about_x_centreline(self, mag_count_x):
         geom = build_plate(mag_count_x=mag_count_x).geometry
-        centre = geom.plate_x / 2
-        offsets = sorted(abs(x - centre) for x in geom.mag_xs)
+        center = geom.plate_x / 2
+        offsets = sorted(abs(x - center) for x in geom.mag_xs)
         if len(offsets) % 2:
-            # an odd count has one bore exactly on the centreline
+            # an odd count has one bore exactly on the centerline
             assert offsets[0] == pytest.approx(0.0, abs=1e-9)
             offsets = offsets[1:]
         for a, b in zip(offsets[0::2], offsets[1::2]):
