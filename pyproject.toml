@@ -10,6 +10,10 @@ dependencies = [
     "manifold3d",
     "shapely",
     "matplotlib",
+]
+
+[project.optional-dependencies]
+test = [
     "pytest",
     "rtree",
 ]
