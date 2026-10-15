@@ -34,15 +34,53 @@ never changes -- it isn't one of the three.
 
 ---
 
-## 3.0.2 — Tag format left to the global rules
+## 3.0.7 — Tag format left to the global rules
 
 Iterative (unreleased). Documentation only; the plate and coupon geometry
-are unchanged from 3.0.1 (triangle data byte-identical).
+are unchanged from 3.0.5 (triangle data byte-identical).
 
 ### Changed
 - `CLAUDE.md` no longer restates the release-tag format, so hotfix tags
   (`x.y.z.h`) aren't contradicted; the global rules set it. It still notes
   that tags up to `v3.0.0` keep their `v` prefix.
+
+## 3.0.5 — Pinned, hashed dependency lock
+
+Iterative (unreleased). Packaging and docs only; the plate and coupon
+geometry are unchanged from 3.0.1 (triangle data byte-identical).
+
+### Changed
+- Added `requirements.lock`, a pinned and hashed lock of every dependency
+  (generated with `pip-compile --generate-hashes` from the loose
+  `requirements.txt`). The documented setup installs from it with
+  `--require-hashes`, so a fresh venv reproduces the same meshes instead
+  of picking up whatever versions are current (#16).
+- The setup steps in the README and `CLAUDE.md` use `python3.14` and the
+  lock; the README explains how to regenerate it.
+
+## 3.0.4 — Minimum printable feature sizes
+
+Iterative (unreleased). Input validation only; the default plate and
+coupon geometry are unchanged from 3.0.1 (triangle data byte-identical).
+
+### Fixed
+- `build_plate()` now raises a `ValueError` naming the parameter and its
+  minimum for feature sizes too small to print, instead of returning a
+  "watertight" plate silently lacking its rib, bores or branding:
+  `mag_d`, `mag_depth`, `stack_w`, `stack_len` and `stack_h` must be
+  >= 0.8 mm, `deboss_d` >= 0.2 mm, and `stack_play` >= 0.1 mm (0 is a
+  press fit that won't seat on FDM prints) (#6).
+
+## 3.0.3 — Dollar-sign label test asserts on the rendered glyphs
+
+Iterative (unreleased). Test only; the plate and coupon geometry are
+unchanged from 3.0.1 (triangle data byte-identical).
+
+### Fixed
+- The label test for `$` characters now checks the rendered glyphs
+  (a literal `$` glyph exists, and "Save $5 and $6" is wider and has
+  more ink than "Save 5 and 6") instead of only watertightness, so a
+  regression to mathtext parsing makes the suite fail (#1).
 
 ## 3.0.1 — Working rules aligned with account policy
 
