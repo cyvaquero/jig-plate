@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "jig-plate"
 version = "3.0.9"
@@ -17,6 +21,11 @@ test = [
     "pytest",
     "rtree",
 ]
+
+[tool.setuptools]
+# Flat layout: only the library is a module. jig-plate.py is a hyphenated
+# script, not importable; output/ and images/ are generated folders.
+py-modules = ["jig_plate_base"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
