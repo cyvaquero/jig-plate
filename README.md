@@ -135,6 +135,13 @@ argument (plate size, magnet spec/count/spacing, stacking rib/groove
 dimensions, the debossed label). See `jig_plate_base.py` for the full
 parameter list — all of it defaults to the same base plate this CLI ships.
 
+`build_plate()` rejects feature sizes too small to print with a `ValueError`
+naming the parameter and its minimum: `mag_d`, `mag_depth`, `stack_w`,
+`stack_len` and `stack_h` must be at least 0.8 mm (about two perimeters at a
+0.4 mm nozzle), `deboss_d` at least 0.2 mm (one layer at a 0.2 mm layer
+height), and `stack_play` at least 0.1 mm (0 is a press fit that won't seat
+on FDM prints).
+
 ## Printing notes
 
 - Print flat, top face up.

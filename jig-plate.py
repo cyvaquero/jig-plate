@@ -590,6 +590,21 @@ Changelog
          Verified: plate and coupon STL triangle data (bytes 80+)
          byte-identical to 3.0.0; both meshes watertight; full test
          suite passes.
+  3.0.3  test only, no geometry change: the dollar-sign label test asserts on
+         the glyph polygons from _text_polys instead of just watertightness,
+         so re-enabling mathtext (ismath=True) now fails it (#1).
+         Verified: with ismath=True the test fails, reverted it passes;
+         plate and coupon STL triangle data (bytes 80+) byte-identical to
+         3.0.1; both meshes watertight; full suite passes.
+  3.0.4  build_plate() rejects unprintable feature sizes (no default change):
+         mag_d, mag_depth, stack_w, stack_len, stack_h >= 0.8 mm (the new
+         module-level _MIN_WALL), deboss_d >= 0.2 mm, stack_play >= 0.1 mm;
+         the old checks only required > 0 (stack_play >= 0), so e.g.
+         stack_h=0.05 built a plate with no usable rib (#6).
+         Verified: each repro raises ValueError naming the parameter,
+         exact minimums build; plate and coupon STL triangle data (bytes
+         80+) byte-identical to 3.0.1; both meshes watertight; full suite
+         passes.
   3.0.5  packaging/docs only, no geometry change: requirements.lock (pip-compile
          --generate-hashes from requirements.txt) pins and hashes every
          dependency; README and CLAUDE.md setup install from it on Python

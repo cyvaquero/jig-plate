@@ -24,6 +24,12 @@ from trimesh.creation import box, extrude_polygon
 from shapely.geometry import Polygon, MultiPolygon
 
 
+_MIN_WALL = 0.8  # ~2 perimeters at a common 0.4mm nozzle
+# smallest feature sizes build_plate() accepts (see its input validation)
+_MIN_DEBOSS_D = 0.2   # one layer at a common 0.2mm layer height
+_MIN_STACK_PLAY = 0.1  # 0 is a press fit that won't seat on FDM prints
+
+
 @dataclasses.dataclass(frozen=True)
 class PlateGeometry:
     """Every position a pocket-layout script needs to build on top of the
@@ -238,6 +244,13 @@ def build_plate(
     for the rib to bottom out against, while the other "side" is the open
     mouth at the plate's bottom face, which needs no clearance of its own.
 
+    Feature sizes must be printable, or `ValueError` is raised naming the
+    parameter and its minimum: `mag_d`, `mag_depth`, `stack_w`, `stack_len`
+    and `stack_h` >= 0.8 mm (about two perimeters at a 0.4 mm nozzle),
+    `deboss_d` >= 0.2 mm (one layer at a 0.2 mm layer height), and
+    `stack_play` >= 0.1 mm (0 is a press fit that won't seat on FDM
+    prints).
+
     Returns a `PlateResult` (`.solid`: trimesh.Trimesh, `.geometry`:
     PlateGeometry). Pure -- no file I/O, no argv, no printing.
     """
@@ -280,18 +293,26 @@ def build_plate(
             f"plate_x/plate_y/plate_z must be positive, got "
             f"({plate_x}, {plate_y}, {plate_z})"
         )
-    # every dimension that sizes an actual cut/mark feature must be
-    # strictly positive, or that feature silently vanishes (mag_depth=0
-    # cuts no bore at all, stack_h=0 leaves no rib, deboss_d=0 debosses
-    # nothing) rather than failing -- caught here, not by the collision
-    # check below, since a zero-size feature never overlaps anything.
-    for _name, _value in (
-        ("mag_d", mag_d), ("mag_depth", mag_depth),
-        ("stack_w", stack_w), ("stack_len", stack_len),
-        ("stack_h", stack_h), ("deboss_d", deboss_d),
+    # every dimension that sizes an actual cut/mark feature must reach a
+    # printable minimum, or that feature silently vanishes or prints as
+    # nothing (mag_depth=0 cuts no bore at all, stack_h=0.05 leaves a rib
+    # no printer can lay down, deboss_d=0.001 debosses nothing visible)
+    # rather than failing -- caught here, not by the collision check
+    # below, since a near-zero-size feature never overlaps anything.
+    # Anything below the minimum (zero and negative included) is rejected.
+    for _name, _value, _min, _why in (
+        ("mag_d", mag_d, _MIN_WALL, "minimum printable feature"),
+        ("mag_depth", mag_depth, _MIN_WALL, "minimum printable feature"),
+        ("stack_w", stack_w, _MIN_WALL, "minimum printable feature"),
+        ("stack_len", stack_len, _MIN_WALL, "minimum printable feature"),
+        ("stack_h", stack_h, _MIN_WALL, "minimum printable feature"),
+        ("deboss_d", deboss_d, _MIN_DEBOSS_D,
+         "one layer at a common 0.2 mm layer height"),
     ):
-        if _value <= 0:
-            raise ValueError(f"{_name} must be positive, got {_value}")
+        if _value < _min:
+            raise ValueError(
+                f"{_name} must be >= {_min} mm ({_why}), got {_value}"
+            )
     if front_margin < 0 or back_margin < 0:
         raise ValueError(
             f"front_margin/back_margin must be >= 0, got "
@@ -302,11 +323,13 @@ def build_plate(
             f"mag_count_x ({mag_count_x}) must be >= 2 -- the bore-spacing "
             "formula divides by (mag_count_x - 1)"
         )
-    if stack_play < 0:
+    if stack_play < _MIN_STACK_PLAY:
         raise ValueError(
-            f"stack_play ({stack_play}) must be >= 0, or the groove is cut "
-            "narrower and shallower than the rib it has to receive -- two "
-            "plates couldn't stack"
+            f"stack_play must be >= {_MIN_STACK_PLAY} mm (fit clearance), "
+            f"got {stack_play}: below 0 the groove is cut narrower and "
+            "shallower than the rib it has to receive -- two plates "
+            "couldn't stack -- and at 0 it is a press fit that won't seat "
+            "on FDM prints"
         )
     if plate_x > 246.0:
         raise ValueError(
@@ -387,11 +410,11 @@ def build_plate(
     # Every mechanical feature (magnet bores, stacking rib/groove,
     # debossed branding) as an axis-aligned bounding box, checked for
     # (a) staying within the plate's own bounds -- with at least
-    # _min_wall of material left, not just non-negative -- on every axis
+    # _MIN_WALL of material left, not just non-negative -- on every axis
     # where it isn't deliberately supposed to reach or cross one (a
     # blind bore's mouth sits exactly at the face it's drilled from; the
     # rib deliberately stands proud above the top face), and (b) not
-    # coming within _min_wall of any other feature. Bounding boxes
+    # coming within _MIN_WALL of any other feature. Bounding boxes
     # around the round bores (and the irregular debossed glyph shapes)
     # are a conservative approximation -- it can reject a few diagonal
     # near-misses that would actually clear, but it can never miss a
@@ -403,11 +426,10 @@ def build_plate(
     # `touch` names which of this feature's own boundaries is deliberately
     # anchored flush to a plate face (a blind bore's mouth, at the face
     # it's drilled from; the branding's cut depth, at the face it's
-    # debossed into) -- equality is fine there, no _min_wall required.
-    # Every other boundary must keep _min_wall clear of the far face, or
+    # debossed into) -- equality is fine there, no _MIN_WALL required.
+    # Every other boundary must keep _MIN_WALL clear of the far face, or
     # the cut leaves less material there than can reliably print, which
     # is just as broken as overshooting it outright.
-    _min_wall = 0.8  # ~2 perimeters at a common 0.4mm nozzle
     _features = []  # (name, (x0,y0,z0,x1,y1,z1), bounds_or_None, touch_set)
     _plate_bounds = (0.0, 0.0, 0.0, plate_x, plate_y, plate_z)
     for _mx in mag_xs:
@@ -476,8 +498,8 @@ def build_plate(
     _eps = 1e-6  # floating-point noise only, on boundaries allowed to touch
 
     def _bound_ok(lo, hi, blo, bhi, touch_lo, touch_hi):
-        lo_ok = lo >= blo - _eps if touch_lo else lo >= blo + _min_wall - _eps
-        hi_ok = hi <= bhi + _eps if touch_hi else hi <= bhi - _min_wall + _eps
+        lo_ok = lo >= blo - _eps if touch_lo else lo >= blo + _MIN_WALL - _eps
+        hi_ok = hi <= bhi + _eps if touch_hi else hi <= bhi - _MIN_WALL + _eps
         return lo_ok and hi_ok
 
     for _name, _box, _bounds, _touch in _features:
@@ -489,18 +511,18 @@ def build_plate(
                           "x_min" in _touch, "x_max" in _touch):
             raise ValueError(
                 f"{_name} extends past the plate's left/right edge, or "
-                f"leaves less than {_min_wall}mm of material there "
+                f"leaves less than {_MIN_WALL}mm of material there "
                 f"(X {_x0:.2f}..{_x1:.2f}, plate is 0..{_bx1:.2f})"
             )
         if not _bound_ok(_y0, _y1, _by0, _by1,
                           "y_min" in _touch, "y_max" in _touch):
             raise ValueError(
                 f"{_name} extends past the plate's front/back edge, or "
-                f"leaves less than {_min_wall}mm of material there "
+                f"leaves less than {_MIN_WALL}mm of material there "
                 f"(Y {_y0:.2f}..{_y1:.2f}, plate is 0..{_by1:.2f})"
             )
         if _bz1 is None:
-            if _z0 < _bz0 - _eps if "z_min" in _touch else _z0 < _bz0 + _min_wall:
+            if _z0 < _bz0 - _eps if "z_min" in _touch else _z0 < _bz0 + _MIN_WALL:
                 raise ValueError(
                     f"{_name} extends below the bottom face "
                     f"(Z min {_z0:.2f})"
@@ -509,7 +531,7 @@ def build_plate(
                             "z_min" in _touch, "z_max" in _touch):
             raise ValueError(
                 f"{_name} extends past the top or bottom face, or "
-                f"leaves less than {_min_wall}mm of material there "
+                f"leaves less than {_MIN_WALL}mm of material there "
                 f"(Z {_z0:.2f}..{_z1:.2f}, plate is 0..{_bz1:.2f})"
             )
 
@@ -520,15 +542,15 @@ def build_plate(
             _name_b, _box_b, _, _ = _features[_j]
             _bx0, _by0, _bz0, _bx1, _by1, _bz1 = _box_b
             # per-axis separation (negative = actual overlap on that
-            # axis); if the *best* axis doesn't clear _min_wall, the two
+            # axis); if the *best* axis doesn't clear _MIN_WALL, the two
             # features are too close on every axis simultaneously, i.e.
             # they either overlap outright or leave too thin a wall.
             _gap_x = max(_ax0 - _bx1, _bx0 - _ax1)
             _gap_y = max(_ay0 - _by1, _by0 - _ay1)
             _gap_z = max(_az0 - _bz1, _bz0 - _az1)
-            if max(_gap_x, _gap_y, _gap_z) < _min_wall - _eps:
+            if max(_gap_x, _gap_y, _gap_z) < _MIN_WALL - _eps:
                 raise ValueError(
-                    f"{_name_a} comes within {_min_wall}mm of {_name_b} "
+                    f"{_name_a} comes within {_MIN_WALL}mm of {_name_b} "
                     "(or overlaps it)"
                 )
 
