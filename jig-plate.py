@@ -633,6 +633,16 @@ Changelog
          `v` prefix stays. Verified: plate and coupon STL triangle data
          (bytes 80+) byte-identical to 3.0.6; both meshes watertight;
          full test suite passes.
+  3.0.9  drawing fix, no geometry change (#36): the isometric diagram's
+         "Back edge" leader is now anchored left of the "Magnet bore"
+         bore (x fraction 0.25 -> 0.45), so it runs under that leader
+         and the two no longer cross.
+         New tests/test_diagram.py computes the leader segments from the
+         figure's artists and asserts no two intersect.
+         Verified: plate and coupon STL triangle data (bytes 80+)
+         byte-identical to 3.0.7; both meshes watertight; diagram PNG
+         inspected (no crossings, no label overlaps); full suite passes;
+         the new test fails with the old label position.
 """
 import argparse
 import sys
@@ -655,7 +665,7 @@ def _faint(color, alpha):
     amount and made several section/body outlines nearly invisible."""
     return _to_rgba(color, alpha)
 
-VERSION = "3.0.7"
+VERSION = "3.0.9"
 OUT_DIR = Path(__file__).resolve().parent / "output"
 IMG_DIR = Path(__file__).resolve().parent / "images"
 
@@ -787,7 +797,9 @@ def _plate_diagram(out_path, geom):
            "Right edge (branding, mirrored on the left)", ha="right",
            dashed=False)
 
-    back_pt = iso(px * 0.25, py, pz * 0.35)
+    # anchored left of the "Magnet bore" bore (see below), so this leader
+    # runs under that one instead of crossing it
+    back_pt = iso(px * 0.45, py, pz * 0.35)
     leader(ax, back_pt, (back_pt[0] + 70, back_pt[1] - 55),
            "Back edge (magnets, mirrored on the front)", dashed=False)
 
