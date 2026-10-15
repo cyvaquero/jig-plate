@@ -34,7 +34,6 @@ def iso_axes(tmp_path_factory):
 
 
 def test_corner_rib_inset_is_present_and_labeled_with_its_scale(iso_axes):
-    fig = iso_axes.figure
     assert len(iso_axes.child_axes) == 1
     inset = iso_axes.child_axes[0]
     titles = [t.get_text() for t in inset.texts]
@@ -42,8 +41,8 @@ def test_corner_rib_inset_is_present_and_labeled_with_its_scale(iso_axes):
     assert any(t == "rib" for t in [a.get_text() for a in inset.texts])
 
 
-def _amber_top(axes, alpha):
-    want = tuple(cli._faint(cli.AMBER, alpha))
+def _amber_top(axes, alpha, fc=cli._faint):
+    want = tuple(fc(cli.AMBER, alpha))
     (patch,) = [p for p in axes.patches
                if type(p).__name__ == "Polygon" and tuple(p.get_fc()) == want]
     return patch
@@ -53,7 +52,7 @@ def test_corner_rib_inset_magnification_matches_its_label(iso_axes):
     # the rib's top face, measured in rendered pixels in the inset and in
     # the main view, must differ by exactly the labeled zoom
     main = _amber_top(iso_axes, 0.7).get_window_extent()
-    inset = _amber_top(iso_axes.child_axes[0], 0.9).get_window_extent()
+    inset = _amber_top(iso_axes.child_axes[0], 0.9, cli._solid).get_window_extent()
     assert inset.width / main.width == pytest.approx(cli.INSET_ZOOM, rel=0.01)
     assert inset.height / main.height == pytest.approx(cli.INSET_ZOOM, rel=0.01)
 
@@ -69,3 +68,12 @@ def test_corner_rib_inset_clears_the_plate_and_every_label(iso_axes):
         if isinstance(patch, Polygon) and patch.get_fc()[3] > 0:
             path = patch.get_transform().transform_path(patch.get_path())
             assert not path.intersects_bbox(inset_box, filled=True)
+
+
+def test_corner_rib_inset_rib_faces_hide_the_edges_behind_them(iso_axes):
+    # the rib stands in front of the corner's plate edges; see-through
+    # faces let those edges show through it
+    amber = [p for p in iso_axes.child_axes[0].patches
+             if type(p).__name__ == "Polygon" and p.get_ec()[3] > 0]
+    assert len(amber) == 3
+    assert all(p.get_fc()[3] == 1.0 for p in amber)
