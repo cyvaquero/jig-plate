@@ -596,6 +596,15 @@ Changelog
          Verified: with ismath=True the test fails, reverted it passes;
          plate and coupon STL triangle data (bytes 80+) byte-identical to
          3.0.1; both meshes watertight; full suite passes.
+  3.0.4  build_plate() rejects unprintable feature sizes (no default change):
+         mag_d, mag_depth, stack_w, stack_len, stack_h >= 0.8 mm (the new
+         module-level _MIN_WALL), deboss_d >= 0.2 mm, stack_play >= 0.1 mm;
+         the old checks only required > 0 (stack_play >= 0), so e.g.
+         stack_h=0.05 built a plate with no usable rib (#6).
+         Verified: each repro raises ValueError naming the parameter,
+         exact minimums build; plate and coupon STL triangle data (bytes
+         80+) byte-identical to 3.0.1; both meshes watertight; full suite
+         passes.
 """
 import argparse
 from pathlib import Path
@@ -617,7 +626,7 @@ def _faint(color, alpha):
     amount and made several section/body outlines nearly invisible."""
     return _to_rgba(color, alpha)
 
-VERSION = "3.0.3"
+VERSION = "3.0.4"
 OUT_DIR = Path(__file__).resolve().parent / "output"
 IMG_DIR = Path(__file__).resolve().parent / "images"
 
