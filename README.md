@@ -54,8 +54,19 @@ below.
 - pytest, rtree (for the test suite -- see [Tests](#tests))
 
 ```bash
-python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
+python3.14 -m venv .venv
+.venv/bin/pip install --require-hashes -r requirements.lock
+```
+
+`requirements.lock` pins every dependency, direct and transitive, to an exact
+version with hashes, so a fresh venv reproduces the same meshes. It targets
+Python 3.14 (`manifold3d` has no wheel for 3.15 yet). `requirements.txt` is
+the loose, unpinned input. To regenerate the lock after changing it, from a
+Python 3.14 venv with [pip-tools](https://pip-tools.readthedocs.io/)
+installed (`pip install pip-tools`):
+
+```bash
+pip-compile --generate-hashes --output-file requirements.lock requirements.txt
 ```
 
 ## Usage
@@ -123,6 +134,13 @@ result.geometry.stack_ys  # ...and Y positions — avoid these zones when
 argument (plate size, magnet spec/count/spacing, stacking rib/groove
 dimensions, the debossed label). See `jig_plate_base.py` for the full
 parameter list — all of it defaults to the same base plate this CLI ships.
+
+`build_plate()` rejects feature sizes too small to print with a `ValueError`
+naming the parameter and its minimum: `mag_d`, `mag_depth`, `stack_w`,
+`stack_len` and `stack_h` must be at least 0.8 mm (about two perimeters at a
+0.4 mm nozzle), `deboss_d` at least 0.2 mm (one layer at a 0.2 mm layer
+height), and `stack_play` at least 0.1 mm (0 is a press fit that won't seat
+on FDM prints).
 
 ## Printing notes
 
