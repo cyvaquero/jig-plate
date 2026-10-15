@@ -144,6 +144,18 @@ class TestLabel:
         # by default, which silently dropped characters ("Save $5 and
         # $6" -> "Save 5and6"); ismath is now forced off in _text_polys.
         assert build_plate(label="Save $5 and $6").solid.is_watertight
+        # Watertightness is true for both renderings, so assert on the
+        # glyphs themselves: a literal "$" is a real glyph, and the label
+        # keeps both "$" glyphs (more ink and a wider run than the same
+        # text without them, which is what mathtext would have produced).
+        from jig_plate_base import _text_polys
+        assert _text_polys("$", 10, 0, 0)
+        with_d = _text_polys("Save $5 and $6", 10, 0, 0)
+        without = _text_polys("Save 5 and 6", 10, 0, 0)
+        area = lambda ps: sum(p.area for p in ps)
+        width = lambda ps: max(p.bounds[2] for p in ps) - min(p.bounds[0] for p in ps)
+        assert area(with_d) > area(without)
+        assert width(with_d) > width(without)
 
     def test_label_with_dollar_and_backslash_does_not_crash(self):
         # previously crashed as invalid mathtext syntax
