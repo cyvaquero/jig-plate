@@ -37,12 +37,44 @@ never changes -- it isn't one of the three.
 ## 3.0.7 — Tag format left to the global rules
 
 Iterative (unreleased). Documentation only; the plate and coupon geometry
-are unchanged from 3.0.5 (triangle data byte-identical).
+are unchanged from 3.0.6 (triangle data byte-identical).
 
 ### Changed
 - `CLAUDE.md` no longer restates the release-tag format, so hotfix tags
   (`x.y.z.h`) aren't contradicted; the global rules set it. It still notes
   that tags up to `v3.0.0` keep their `v` prefix.
+
+## 3.0.6 — Review notes from 3.0.0
+
+Iterative (unreleased). The plate and coupon geometry are unchanged from
+3.0.1 (triangle data byte-identical).
+
+### Fixed
+- `jig-plate.py` still writes both STLs when a mesh is not watertight (so
+  it can be inspected) but now prints an error naming the mesh to stderr
+  and exits with status 1 instead of 0 (#28).
+- The top plan drawing now shows the debossed branding footprint; the
+  front elevation shows the hidden bottom bores and stacking grooves
+  dashed; the isometric diagram states its x3 vertical exaggeration and
+  its "Bottom" and "Magnet bore" labels no longer sit on the part; the
+  0.2 mm clearance dimension on the detail sheet puts its arrowheads
+  outside the extension lines so they no longer collide (#28).
+
+### Changed
+- `PlateGeometry` gains `top_branding_bounds` (the top-face branding
+  footprint) and documents `front_margin`/`back_margin`; `back_margin` is
+  kept for pocket-layout scripts that need the back band (#28).
+- `pytest` and `rtree` are now a `test` extra in `pyproject.toml` rather
+  than runtime dependencies; `requirements.txt` and `requirements.lock`
+  are unchanged (#28).
+- The detail sheet's magnet size comes from constants instead of a local
+  shadowing `geom.mag_depth`; `stamp()` uses `Path` I/O; `.gitignore` no
+  longer ignores `*.stl` everywhere; `build_plate()`'s docstring points
+  at records that exist; comments explain why two validation checks are
+  kept alongside the feature-box check (#28).
+- Tests: the default `mag_xs` are pinned to literals and probed on the
+  mesh, the left-face branding collision box has its own case, and a
+  stale comment and a one-line helper are gone (#28).
 
 ## 3.0.5 — Pinned, hashed dependency lock
 
