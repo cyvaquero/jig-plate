@@ -612,6 +612,21 @@ Changelog
          Verified: a fresh venv from the lock (--require-hashes) builds
          plate and coupon STLs byte-identical (bytes 80+) to the previous
          venv's, both meshes watertight, full suite passes.
+  3.0.6  review notes from 3.0.0 (#28), no geometry change: main() still
+         writes both STLs but exits 1 with an error on stderr when a mesh
+         is not watertight; the top plan draws the debossed branding
+         footprint (new PlateGeometry.top_branding_bounds); the isometric
+         diagram notes its x3 vertical exaggeration and its labels clear
+         the part; the front elevation shows the hidden bottom bores and
+         grooves dashed; the 0.2 mm clearance dimension uses tick ends;
+         the detail sheet's magnet size comes from constants; stamp() uses
+         Path I/O; pytest and rtree move to a test extra in pyproject.toml;
+         new tests pin the default mag_xs and the side-face branding
+         collision box.
+         Verified: plate and coupon STL triangle data (bytes 80+)
+         byte-identical to 3.0.5; both meshes watertight; PNGs inspected
+         before and after; each new test fails when its fix is reverted;
+         full suite passes.
 """
 import argparse
 import sys
@@ -634,9 +649,16 @@ def _faint(color, alpha):
     amount and made several section/body outlines nearly invisible."""
     return _to_rgba(color, alpha)
 
-VERSION = "3.0.5"
+VERSION = "3.0.6"
 OUT_DIR = Path(__file__).resolve().parent / "output"
 IMG_DIR = Path(__file__).resolve().parent / "images"
+
+# Z exaggeration of the isometric overview (the plate is only 9 mm thick)
+ISO_Z_EXAGGERATION = 3
+# the push-fit magnet the detail sheet draws in the bore: a 6 mm x 3 mm
+# disc (the bore itself is geom.mag_d x geom.mag_depth, slightly larger)
+MAGNET_D = 6.0
+MAGNET_LEN = 3.0
 
 
 # stamp the 80-byte binary STL header so the version travels with the file
@@ -718,7 +740,7 @@ def _plate_diagram(out_path, geom):
     fig.patch.set_facecolor(BG)
     ax.set_facecolor(BG)
 
-    px, py, pz = geom.plate_x * S, geom.plate_y * S, geom.plate_z * S * 3
+    px, py, pz = geom.plate_x * S, geom.plate_y * S, geom.plate_z * S * ISO_Z_EXAGGERATION
 
     ax.add_patch(MplPoly(iso_rect(0, 0, px, py, pz),
                  fc=_faint(SHAPE, 0.16), ec=FG, lw=0.5, zorder=2))
@@ -764,16 +786,26 @@ def _plate_diagram(out_path, geom):
            "Back edge (magnets, mirrored on the front)", dashed=False)
 
     bottom_pt = iso(px / 2, py, 0)
-    leader(ax, bottom_pt, (bottom_pt[0] - 90, bottom_pt[1] - 55),
-           "Bottom — sits on the bed, carries mounting magnets", ha="right")
+    # label sits below the part (the back face's bottom edge slopes up to
+    # the right), so neither it nor its leader runs over the plate
+    leader(ax, bottom_pt, (bottom_pt[0] + 40, bottom_pt[1] - 75),
+           "Bottom — sits on the bed, carries mounting magnets")
 
     mag_pt = iso(geom.mag_xs[1] * S, py, pz * 0.5)
-    leader(ax, mag_pt, (mag_pt[0] + 30, mag_pt[1] + 45),
+    # label placed past the plate's right end so the text itself is clear
+    # of the part; the leader still reaches the bore
+    leader(ax, mag_pt, (mag_pt[0] + 135, mag_pt[1] + 10),
            "Magnet bore")
 
     stack_pt = iso(sx0, sy0, pz)
     leader(ax, stack_pt, (stack_pt[0] + 60, stack_pt[1] + 55),
            "Corner stacking rib\n(groove on underside)")
+
+    ax.text(0.01, 0.01,
+            f"Vertical scale ×{ISO_Z_EXAGGERATION}: plate thickness and "
+            "bore heights are exaggerated; X and Y are to scale",
+            transform=ax.transAxes, fontsize=7.5, ha="left", va="bottom",
+            color=MUTED, fontfamily="sans-serif", fontstyle="italic")
 
     add_key(ax, [
         ("plate", SHAPE), ("magnets", VIOLET), ("stacking rib", AMBER),
@@ -958,6 +990,17 @@ def _tech_top_plan(out_path, geom):
                 geom.stack_len * S, geom.stack_w * S,
                 fc=_faint(AMBER, 0.6), ec=FG, lw=0.6, zorder=5))
 
+    # debossed logo + label on the top face (front band): footprint only,
+    # from the same bounds build_plate() validated and cut
+    bx0, by0, bx1, by1 = geom.top_branding_bounds
+    ax.add_patch(plt.Rectangle(
+        (bx0 * S, by0 * S), (bx1 - bx0) * S, (by1 - by0) * S,
+        fc=_faint(SHAPE, 0.25), ec=MUTED, lw=0.6, zorder=4))
+    ax.text((bx0 + bx1) / 2 * S, (by0 + by1) / 2 * S,
+            "branding", fontsize=6,
+            ha="center", va="center", color=FG, fontfamily="sans-serif",
+            zorder=6)
+
     # overall dimensions
     _dim_h(ax, geom.plate_y * S, 0, geom.plate_x * S,
            f"{geom.plate_x:.0f}", offset=12 * S)
@@ -1028,6 +1071,22 @@ def _tech_front_elevation(out_path, geom):
                      fc=_faint(VIOLET, 0.15), ec=VIOLET, lw=0.8, zorder=4))
         ax.plot(bore_cx, bore_cy, "+", color=VIOLET, ms=4, mew=0.5, zorder=5)
 
+    # hidden features, dashed (standard hidden-line convention): the
+    # bottom-face corner mounting bores and the stacking grooves, both
+    # cut up from the underside and so invisible from the front
+    for bore_cx in (geom.bottom_mag_inset_x,
+                    geom.plate_x - geom.bottom_mag_inset_x):
+        ax.add_patch(plt.Rectangle(
+            ((bore_cx - geom.mag_d / 2) * S, 0),
+            geom.mag_d * S, geom.mag_depth * S,
+            fc="none", ec=VIOLET, lw=HIDDEN_LW, ls=HIDDEN_LS, zorder=5))
+    for groove_cx in geom.stack_xs:
+        groove_len = geom.stack_len + geom.stack_play
+        ax.add_patch(plt.Rectangle(
+            ((groove_cx - groove_len / 2) * S, 0),
+            groove_len * S, (geom.stack_h + geom.stack_play) * S,
+            fc="none", ec=FG, lw=HIDDEN_LW, ls=HIDDEN_LS, zorder=5))
+
     # overall X dimension (above)
     _dim_h(ax, geom.plate_z * S, 0, geom.plate_x * S,
            f"{geom.plate_x:.0f}", offset=6 * S)
@@ -1051,7 +1110,7 @@ def _tech_front_elevation(out_path, geom):
 
 
 # ---- technical drawing 3: magnet-bore and stacking-joint detail ----
-def _tech_detail(out_path, geom):
+def _tech_detail(out_path, geom, magnet_d=MAGNET_D, magnet_len=MAGNET_LEN):
     from matplotlib.patches import Polygon as MplPoly
     import matplotlib.gridspec as gridspec
 
@@ -1105,16 +1164,16 @@ def _tech_detail(out_path, geom):
     ax1.add_patch(MplPoly([(y * S1, z * S1) for y, z in bore_verts],
                   fc=BG, ec=FG, lw=CUT_LW, zorder=3))
 
-    mag_r = 3.0
-    mag_depth = 3.0
+    magnet_r = magnet_d / 2
     mag_verts = [
-        (0, mag_cz - mag_r), (mag_depth, mag_cz - mag_r),
-        (mag_depth, mag_cz + mag_r), (0, mag_cz + mag_r),
+        (0, mag_cz - magnet_r), (magnet_len, mag_cz - magnet_r),
+        (magnet_len, mag_cz + magnet_r), (0, mag_cz + magnet_r),
     ]
     ax1.add_patch(MplPoly([(y * S1, z * S1) for y, z in mag_verts],
                   fc=_faint(VIOLET, 0.2), ec=VIOLET, lw=0.8,
                   ls="--", zorder=4))
-    ax1.text(mag_depth / 2 * S1, mag_cz * S1, "magnet\n6×3",
+    ax1.text(magnet_len / 2 * S1, mag_cz * S1,
+             f"magnet\n{magnet_d:g}×{magnet_len:g}",
              fontsize=6.5, ha="center", va="center", color=VIOLET,
              fontfamily="sans-serif", fontstyle="italic", zorder=5)
 
@@ -1131,11 +1190,12 @@ def _tech_detail(out_path, geom):
            f"{mag_cz:.1f}", offset=4 * S1, fontsize=6.5)
     _dim_v(ax1, plate_y1_m * S1, 0, geom.plate_z * S1,
            f"{geom.plate_z:.0f}", offset=9 * S1, fontsize=7)
-    clearance = geom.mag_depth - mag_depth
+    clearance = geom.mag_depth - magnet_len
     if clearance > 0.05:
-        _dim_h(ax1, (mag_cz - bore_r) * S1, mag_depth * S1, geom.mag_depth * S1,
+        # tick ends: the span is narrower than a pair of arrowheads
+        _dim_h(ax1, (mag_cz - bore_r) * S1, magnet_len * S1, geom.mag_depth * S1,
                f"{clearance:.1f}", offset=-3 * S1, side="below",
-               fontsize=5.5)
+               fontsize=5.5, tick=True)
 
     ax1.text(0.5, -0.02,
              "Magnet Bore Detail",
