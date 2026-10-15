@@ -590,6 +590,12 @@ Changelog
          Verified: plate and coupon STL triangle data (bytes 80+)
          byte-identical to 3.0.0; both meshes watertight; full test
          suite passes.
+  3.0.3  test only, no geometry change: the dollar-sign label test asserts on
+         the glyph polygons from _text_polys instead of just watertightness,
+         so re-enabling mathtext (ismath=True) now fails it (#1).
+         Verified: with ismath=True the test fails, reverted it passes;
+         plate and coupon STL triangle data (bytes 80+) byte-identical to
+         3.0.1; both meshes watertight; full suite passes.
 """
 import argparse
 from pathlib import Path
@@ -611,7 +617,7 @@ def _faint(color, alpha):
     amount and made several section/body outlines nearly invisible."""
     return _to_rgba(color, alpha)
 
-VERSION = "3.0.1"
+VERSION = "3.0.3"
 OUT_DIR = Path(__file__).resolve().parent / "output"
 IMG_DIR = Path(__file__).resolve().parent / "images"
 
