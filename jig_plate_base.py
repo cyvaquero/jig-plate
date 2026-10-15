@@ -33,7 +33,16 @@ _MIN_STACK_PLAY = 0.1  # 0 is a press fit that won't seat on FDM prints
 @dataclasses.dataclass(frozen=True)
 class PlateGeometry:
     """Every position a pocket-layout script needs to build on top of the
-    plate without colliding with its magnet bores or stacking rib/groove."""
+    plate without colliding with its magnet bores or stacking rib/groove.
+
+    `front_margin` and `back_margin` are the widths (Y, mm) of the border
+    bands along the front and back faces. Pocket-layout scripts use them
+    to keep pockets out of the bands that house the mounting magnets and
+    branding; `back_margin` positions the back-corner mounting bores
+    (`bottom_mag_ys`) and is the back band's width for a pocket layout
+    that needs it. `top_branding_bounds` is the footprint
+    (x0, y0, x1, y1, mm) of the debossed logo and label on the top face,
+    which lies inside the front band."""
 
     plate_x: float
     plate_y: float
@@ -55,6 +64,7 @@ class PlateGeometry:
     stack_ys: tuple
     label: str
     deboss_d: float
+    top_branding_bounds: tuple = None
 
 
 @dataclasses.dataclass(frozen=True)
@@ -232,10 +242,9 @@ def build_plate(
     zones are so pockets can avoid them.
 
     `build_plate()` with no arguments reproduces the current default plate
-    exactly -- see the `Changelog` block in jig-plate.py's module docstring
-    for what the defaults are and why (the day-to-day, up-to-date record;
-    CHANGELOG.md only records major/minor releases, and its most recent
-    entry describes a feature since removed -- see its own top-of-file note).
+    exactly. For what the defaults are and why, see the 3.0.0 entry in
+    CHANGELOG.md and the `Changelog` block in jig-plate.py's module
+    docstring (the per-iteration record).
 
     `stack_play` gives the rib/groove fit clearance on all three axes, but
     not symmetrically: X and Y split it in half, `stack_play / 2` per side,
@@ -368,6 +377,8 @@ def build_plate(
     _sx = (plate_x - _total) / 2
     _sx_left = (plate_y - _total) / 2
 
+    # Kept although the feature-box checks below also reject an
+    # over-wide branding: this message names the label and both limits.
     if _total > plate_y or _total > plate_x:
         raise ValueError(
             f"branding (logo + label {label!r}) is {_total:.1f} mm wide, "
@@ -399,6 +410,10 @@ def build_plate(
     _side_z0 = min(p.bounds[1] for p in _side_all)  # -> world Z directly
     _side_z1 = max(p.bounds[3] for p in _side_all)
 
+    # Kept although the feature-box check below also rejects these cases
+    # (a Z overrun trips the 0.8 mm wall test on the side-face branding
+    # box): this one names the cause (increase plate_z) instead of a
+    # generic containment failure.
     if _side_z0 < 0 or _side_z1 > plate_z:
         raise ValueError(
             f"side-face branding (logo + label {label!r}) spans Z "
@@ -522,7 +537,10 @@ def build_plate(
                 f"(Y {_y0:.2f}..{_y1:.2f}, plate is 0..{_by1:.2f})"
             )
         if _bz1 is None:
-            if _z0 < _bz0 - _eps if "z_min" in _touch else _z0 < _bz0 + _MIN_WALL:
+            # no upper Z bound (the rib stands proud); same _eps handling
+            # as every other bound via an infinite upper limit
+            if not _bound_ok(_z0, _z1, _bz0, np.inf,
+                              "z_min" in _touch, True):
                 raise ValueError(
                     f"{_name} extends below the bottom face "
                     f"(Z min {_z0:.2f})"
@@ -634,5 +652,6 @@ def build_plate(
         stack_inset_y=stack_inset_y,
         stack_xs=stack_xs, stack_ys=stack_ys,
         label=label, deboss_d=deboss_d,
+        top_branding_bounds=(_top_x0, _top_y0, _top_x1, _top_y1),
     )
     return PlateResult(solid=solid, geometry=geometry)
