@@ -51,8 +51,8 @@ below.
 - [trimesh](https://trimesh.org/) with the
   [Manifold](https://github.com/elalish/manifold) boolean engine
 - NumPy, Shapely, Matplotlib
-- pytest, rtree (test extra only: `pip install -e ".[test]"`, or via
-  `requirements.lock`; see [Tests](#tests))
+- pytest, rtree (for the test suite, installed by `requirements.lock`;
+  see [Tests](#tests))
 
 ```bash
 python3.14 -m venv .venv

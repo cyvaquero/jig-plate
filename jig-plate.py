@@ -618,7 +618,7 @@ Changelog
          footprint (new PlateGeometry.top_branding_bounds); the isometric
          diagram notes its x3 vertical exaggeration and its labels clear
          the part; the front elevation shows the hidden bottom bores and
-         grooves dashed; the 0.2 mm clearance dimension uses tick ends;
+         grooves dashed; the 0.2 mm clearance dimension puts its arrowheads outside;
          the detail sheet's magnet size comes from constants; stamp() uses
          Path I/O; pytest and rtree move to a test extra in pyproject.toml;
          new tests pin the default mag_xs and the side-face branding
@@ -833,17 +833,35 @@ _DIM_LABEL_BBOX = dict(facecolor=BG, edgecolor="none", pad=0.15)
 
 
 def _dim_h(ax, y, x0, x1, label, offset=0, fontsize=7, side="above",
-           tick=False):
-    # tick=True for spans narrower than a pair of arrowheads, which would
-    # otherwise meet in the middle and read as a bowtie
+           outside=False):
+    # outside=True for spans narrower than a pair of arrowheads, which would
+    # otherwise meet in the middle and read as a bowtie: the arrowheads sit
+    # outside the extension lines and point in (ISO 129 small-space style)
     oy = y + offset
     gap = 1.2 if side == "above" else -1.2
-    ax.annotate("", xy=(x0, oy), xytext=(x1, oy),
-                arrowprops=dict(arrowstyle="|-|" if tick else "<->",
-                                color=DIM_COLOR, lw=DIM_LW,
-                                shrinkA=0, shrinkB=0))
+    if outside:
+        ax.plot([x0, x1], [oy, oy], color=DIM_COLOR, lw=DIM_LW)
+        for x, dx in ((x0, -14), (x1, 14)):
+            ax.annotate("", xy=(x, oy), xytext=(dx, 0),
+                        textcoords="offset points",
+                        arrowprops=dict(arrowstyle="->", color=DIM_COLOR,
+                                        lw=DIM_LW, shrinkA=0, shrinkB=0))
+    else:
+        ax.annotate("", xy=(x0, oy), xytext=(x1, oy),
+                    arrowprops=dict(arrowstyle="<->", color=DIM_COLOR,
+                                    lw=DIM_LW, shrinkA=0, shrinkB=0))
     ax.plot([x0, x0], [y, oy], color=DIM_COLOR, lw=EXT_LW)
     ax.plot([x1, x1], [y, oy], color=DIM_COLOR, lw=EXT_LW)
+    if outside:
+        # the outside arrowheads flank the label, so offset it clear of
+        # them in points (a data-unit gap is too small at this scale)
+        ax.annotate(label, xy=((x0 + x1) / 2, oy),
+                    xytext=(0, 6 if side == "above" else -6),
+                    textcoords="offset points", fontsize=fontsize,
+                    ha="center", va="bottom" if side == "above" else "top",
+                    color=DIM_COLOR, fontfamily="sans-serif", zorder=7,
+                    bbox=_DIM_LABEL_BBOX)
+        return
     ax.text((x0 + x1) / 2, oy + gap, label, fontsize=fontsize,
             ha="center", va="bottom" if side == "above" else "top",
             color=DIM_COLOR, fontfamily="sans-serif", zorder=7,
@@ -1192,10 +1210,10 @@ def _tech_detail(out_path, geom, magnet_d=MAGNET_D, magnet_len=MAGNET_LEN):
            f"{geom.plate_z:.0f}", offset=9 * S1, fontsize=7)
     clearance = geom.mag_depth - magnet_len
     if clearance > 0.05:
-        # tick ends: the span is narrower than a pair of arrowheads
+        # arrowheads outside: the span is narrower than a pair of them
         _dim_h(ax1, (mag_cz - bore_r) * S1, magnet_len * S1, geom.mag_depth * S1,
                f"{clearance:.1f}", offset=-3 * S1, side="below",
-               fontsize=5.5, tick=True)
+               fontsize=5.5, outside=True)
 
     ax1.text(0.5, -0.02,
              "Magnet Bore Detail",
