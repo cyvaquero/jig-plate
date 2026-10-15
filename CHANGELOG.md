@@ -34,6 +34,17 @@ never changes -- it isn't one of the three.
 
 ---
 
+## 3.0.11 — Drawings in the README
+
+Iterative (unreleased). Documentation only; the plate and coupon geometry
+are unchanged from 3.0.10 (triangle data byte-identical).
+
+### Added
+- The README shows the isometric diagram and the three technical drawings
+  (top plan, front elevation, detail sheet), each with a text alternative
+  giving its dimensions. Copies live in `docs/images/` under unversioned
+  names and are refreshed whenever a drawing changes.
+
 ## 3.0.10 — Corner stacking rib visible in the isometric diagram
 
 Iterative (unreleased). Drawing only; the plate and coupon geometry are
