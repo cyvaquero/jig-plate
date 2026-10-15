@@ -47,8 +47,8 @@ Iterative (unreleased). The plate and coupon geometry are unchanged from
   front elevation shows the hidden bottom bores and stacking grooves
   dashed; the isometric diagram states its x3 vertical exaggeration and
   its "Bottom" and "Magnet bore" labels no longer sit on the part; the
-  0.2 mm clearance dimension on the detail sheet uses tick ends so its
-  arrowheads no longer collide (#28).
+  0.2 mm clearance dimension on the detail sheet puts its arrowheads
+  outside the extension lines so they no longer collide (#28).
 
 ### Changed
 - `PlateGeometry` gains `top_branding_bounds` (the top-face branding

@@ -589,10 +589,10 @@ class TestGeometryPositions:
         g = result.geometry
         x0, y0, x1, y1 = g.top_branding_bounds
         assert 0 < y0 < y1 <= g.front_margin
-        # centred on the plate in X (logo + label as one block)
+        # centered on the plate in X (logo + label as one block)
         assert (x0 + x1) / 2 == pytest.approx(g.plate_x / 2, abs=1.0)
-        # the logo dome's centre (3 mm in from the block's left edge, just
-        # above the band's centreline) is debossed: empty just under the top
+        # the logo dome's center (3 mm in from the block's left edge, just
+        # above the band's centerline) is debossed: empty just under the top
         probe = (x0 + 3.0, g.front_margin / 2 + 1.5, g.plate_z - g.deboss_d / 2)
         assert not result.solid.contains([probe])[0]
         # and the plate is solid just outside the footprint
