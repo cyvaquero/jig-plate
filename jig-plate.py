@@ -672,6 +672,13 @@ Changelog
          with dimensioned alt text. Verified: STL triangle data (bytes
          80+) byte-identical to 3.0.10; both meshes watertight; full
          test suite passes; drawings viewed.
+  3.0.13 docs only (#23): CHANGELOG.md's 3.0.0 section now lists the
+         changes that can break a 2.4.0 caller -- PlateGeometry's
+         honeycomb_* fields removed, mag_xs/bottom_mag_ys now tuples,
+         a rejected --label exiting 2 with a usage message instead of
+         a traceback. Each checked against `git diff v2.4.0 v3.0.0`.
+         Verified: STL triangle data (bytes 80+) byte-identical to
+         3.0.11; both meshes watertight; full test suite passes.
 """
 import argparse
 import sys
@@ -702,7 +709,7 @@ def _solid(color, alpha):
     fg, bg = _to_rgba(color), _to_rgba(BG)
     return tuple(alpha * c + (1 - alpha) * b for c, b in zip(fg[:3], bg[:3])) + (1.0,)
 
-VERSION = "3.0.11"
+VERSION = "3.0.13"
 OUT_DIR = Path(__file__).resolve().parent / "output"
 IMG_DIR = Path(__file__).resolve().parent / "images"
 
