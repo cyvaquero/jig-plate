@@ -54,8 +54,19 @@ below.
 - pytest, rtree (for the test suite -- see [Tests](#tests))
 
 ```bash
-python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
+python3.14 -m venv .venv
+.venv/bin/pip install --require-hashes -r requirements.lock
+```
+
+`requirements.lock` pins every dependency, direct and transitive, to an exact
+version with hashes, so a fresh venv reproduces the same meshes. It targets
+Python 3.14 (`manifold3d` has no wheel for 3.15 yet). `requirements.txt` is
+the loose, unpinned input. To regenerate the lock after changing it, from a
+Python 3.14 venv with [pip-tools](https://pip-tools.readthedocs.io/)
+installed (`pip install pip-tools`):
+
+```bash
+pip-compile --generate-hashes --output-file requirements.lock requirements.txt
 ```
 
 ## Usage

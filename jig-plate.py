@@ -605,6 +605,13 @@ Changelog
          exact minimums build; plate and coupon STL triangle data (bytes
          80+) byte-identical to 3.0.1; both meshes watertight; full suite
          passes.
+  3.0.5  packaging/docs only, no geometry change: requirements.lock (pip-compile
+         --generate-hashes from requirements.txt) pins and hashes every
+         dependency; README and CLAUDE.md setup install from it on Python
+         3.14 (#16).
+         Verified: a fresh venv from the lock (--require-hashes) builds
+         plate and coupon STLs byte-identical (bytes 80+) to the previous
+         venv's, both meshes watertight, full suite passes.
 """
 import argparse
 from pathlib import Path
@@ -626,7 +633,7 @@ def _faint(color, alpha):
     amount and made several section/body outlines nearly invisible."""
     return _to_rgba(color, alpha)
 
-VERSION = "3.0.4"
+VERSION = "3.0.5"
 OUT_DIR = Path(__file__).resolve().parent / "output"
 IMG_DIR = Path(__file__).resolve().parent / "images"
 
