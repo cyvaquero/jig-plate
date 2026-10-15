@@ -34,6 +34,16 @@ never changes -- it isn't one of the three.
 
 ---
 
+## 3.0.9 — Isometric diagram leaders no longer cross
+
+Iterative (unreleased). Drawing only; the plate and coupon geometry are
+unchanged from 3.0.7 (triangle data byte-identical).
+
+### Fixed
+- In the isometric diagram, the "Magnet bore" leader no longer crosses the
+  "Back edge (magnets, mirrored on the front)" leader; the Back edge leader
+  is now anchored left of the bore and runs under it (#36).
+
 ## 3.0.7 — Tag format left to the global rules
 
 Iterative (unreleased). Documentation only; the plate and coupon geometry
