@@ -614,6 +614,7 @@ Changelog
          venv's, both meshes watertight, full suite passes.
 """
 import argparse
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -646,9 +647,10 @@ def stamp(path, text):
     # truncate either, it grows the bytearray and shifts every byte of
     # the binary STL body after it, silently corrupting the file.
     header = text.encode("ascii")[:80].ljust(80, b"\x00")
-    b = bytearray(open(path, "rb").read())
+    path = Path(path)
+    b = bytearray(path.read_bytes())
     b[0:80] = header
-    open(path, "wb").write(b)
+    path.write_bytes(b)
 
 
 # -------- diagram / technical drawing styling --------
@@ -1343,6 +1345,10 @@ def main():
         f"stack coupon {geom.plate_x - SC_X0:g}x{SC_Y1 - SC_Y0:g}"
         f"x{geom.plate_z + geom.stack_h:.1f}mm | corner, magnet+rib wall test",
     )
+    failed = [
+        name for name, mesh in (("plate", solid), ("stack coupon", stack_coupon))
+        if not mesh.is_watertight
+    ]
     print(
         "stack coupon:",
         stack_coupon.is_watertight,
@@ -1356,6 +1362,16 @@ def main():
     _tech_top_plan(IMG_DIR / f"jig_plate_{VERSION}_tech_top.png", geom)
     _tech_front_elevation(IMG_DIR / f"jig_plate_{VERSION}_tech_front.png", geom)
     _tech_detail(IMG_DIR / f"jig_plate_{VERSION}_tech_detail.png", geom)
+
+    # the files above are still written so the broken mesh can be inspected,
+    # but a non-watertight mesh must not pass for a good build
+    if failed:
+        print(
+            f"error: {' and '.join(failed)} mesh not watertight -- the "
+            "geometry is broken; do not release or print these STLs",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
 
 if __name__ == "__main__":
