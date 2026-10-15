@@ -47,6 +47,17 @@ coupon geometry are unchanged from 3.0.1 (triangle data byte-identical).
   >= 0.8 mm, `deboss_d` >= 0.2 mm, and `stack_play` >= 0.1 mm (0 is a
   press fit that won't seat on FDM prints) (#6).
 
+## 3.0.3 — Dollar-sign label test asserts on the rendered glyphs
+
+Iterative (unreleased). Test only; the plate and coupon geometry are
+unchanged from 3.0.1 (triangle data byte-identical).
+
+### Fixed
+- The label test for `$` characters now checks the rendered glyphs
+  (a literal `$` glyph exists, and "Save $5 and $6" is wider and has
+  more ink than "Save 5 and 6") instead of only watertightness, so a
+  regression to mathtext parsing makes the suite fail (#1).
+
 ## 3.0.1 — Working rules aligned with account policy
 
 Iterative (unreleased). Documentation and process only; the plate and
