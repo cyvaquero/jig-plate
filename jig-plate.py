@@ -633,6 +633,26 @@ Changelog
          `v` prefix stays. Verified: plate and coupon STL triangle data
          (bytes 80+) byte-identical to 3.0.6; both meshes watertight;
          full test suite passes.
+  3.0.8  packaging only, no geometry change: pyproject.toml gains a
+         [build-system] table (setuptools>=61, the first release with
+         PEP 621 support) and [tool.setuptools] py-modules =
+         ["jig_plate_base"], so `pip install .`, `pip install -e .` and
+         `.[test]` work on the flat layout even with output/ and images/
+         present; they previously failed with "Multiple top-level packages
+         discovered". Verified in a fresh 3.14 venv: all three installs
+         succeed and `import jig_plate_base` works from outside the repo;
+         STLs (bytes 80+) byte-identical to 3.0.7; both meshes watertight;
+         full test suite passes.
+  3.0.9  drawing fix, no geometry change (#36): the isometric diagram's
+         "Back edge" leader is now anchored left of the "Magnet bore"
+         bore (x fraction 0.25 -> 0.45), so it runs under that leader
+         and the two no longer cross.
+         New tests/test_diagram.py computes the leader segments from the
+         figure's artists and asserts no two intersect.
+         Verified: plate and coupon STL triangle data (bytes 80+)
+         byte-identical to 3.0.7; both meshes watertight; diagram PNG
+         inspected (no crossings, no label overlaps); full suite passes;
+         the new test fails with the old label position.
   3.0.10 drawing fix, no geometry change (#37): the isometric diagram's
          6 x 1.5 mm corner stacking rib was a few pixels under the
          leader's dot. A dashed frame now marks it (the dot sits on the
@@ -891,7 +911,9 @@ def _plate_diagram(out_path, geom):
            "Right edge (branding, mirrored on the left)", ha="right",
            dashed=False)
 
-    back_pt = iso(px * 0.25, py, pz * 0.35)
+    # anchored left of the "Magnet bore" bore (see below), so this leader
+    # runs under that one instead of crossing it
+    back_pt = iso(px * 0.45, py, pz * 0.35)
     leader(ax, back_pt, (back_pt[0] + 70, back_pt[1] - 55),
            "Back edge (magnets, mirrored on the front)", dashed=False)
 

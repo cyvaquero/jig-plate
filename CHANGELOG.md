@@ -46,6 +46,29 @@ unchanged from 3.0.7 (triangle data byte-identical).
   (rib 6 × 1.5 mm, 1.5 mm tall; labeled, outlined and shaded so it does not
   rely on color) (#37).
 
+## 3.0.9 — Isometric diagram leaders no longer cross
+
+Iterative (unreleased). Drawing only; the plate and coupon geometry are
+unchanged from 3.0.7 (triangle data byte-identical).
+
+### Fixed
+- In the isometric diagram, the "Magnet bore" leader no longer crosses the
+  "Back edge (magnets, mirrored on the front)" leader; the Back edge leader
+  is now anchored left of the bore and runs under it (#36).
+
+## 3.0.8 — pyproject.toml is installable
+
+Iterative (unreleased). Packaging only; the plate and coupon geometry are
+unchanged from 3.0.7 (triangle data byte-identical).
+
+### Fixed
+- `pip install .`, `pip install -e .` and `pip install ".[test]"` now work.
+  `pyproject.toml` gains a `[build-system]` table (setuptools 61 or newer,
+  the first with `[project]` support) and an explicit
+  `[tool.setuptools] py-modules = ["jig_plate_base"]`; before, setuptools
+  found the generated `images/` and `output/` folders and refused to build
+  (#35). Other generators can now depend on the library by version.
+
 ## 3.0.7 — Tag format left to the global rules
 
 Iterative (unreleased). Documentation only; the plate and coupon geometry

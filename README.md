@@ -70,6 +70,11 @@ installed (`pip install pip-tools`):
 pip-compile --generate-hashes --output-file requirements.lock requirements.txt
 ```
 
+To use `jig_plate_base` from another project instead, install this repo as
+a package (`pip install .`, or `pip install ".[test]"` to add the test
+extra). That installs only the library module; `jig-plate.py` is a script
+and is run from a checkout.
+
 ## Usage
 
 ```bash
