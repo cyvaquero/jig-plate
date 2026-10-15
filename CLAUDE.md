@@ -34,7 +34,8 @@ CLI-only belongs in `jig-plate.py`.
 Writes STLs to `output/` and PNGs to `images/`, both gitignored. The script
 prints `watertight: True` for the plate and `stack coupon: True` for the
 coupon (that flag is its watertightness). If either is `False`, the
-geometry is broken and must not be released.
+geometry is broken and must not be released (the script then also
+exits 1, after still writing the files).
 
 From another generator script:
 
