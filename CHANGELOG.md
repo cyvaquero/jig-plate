@@ -34,6 +34,18 @@ never changes -- it isn't one of the three.
 
 ---
 
+## 3.0.10 — Corner stacking rib visible in the isometric diagram
+
+Iterative (unreleased). Drawing only; the plate and coupon geometry are
+unchanged from 3.0.7 (triangle data byte-identical).
+
+### Fixed
+- The isometric diagram's corner stacking rib was a few pixels, hidden
+  under its leader's dot. The callout now points at a dashed frame around
+  the rib, and a "Detail A, ×6" inset shows the corner enlarged six times
+  (rib 6 × 1.5 mm, 1.5 mm tall; labeled, outlined and shaded so it does not
+  rely on color) (#37).
+
 ## 3.0.7 — Tag format left to the global rules
 
 Iterative (unreleased). Documentation only; the plate and coupon geometry

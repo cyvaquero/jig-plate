@@ -91,7 +91,8 @@ Generates into `output/`:
 
 And into `images/`:
 
-- `jig_plate_<version>_diagram.png` — isometric plate overview
+- `jig_plate_<version>_diagram.png` — isometric plate overview, with an
+  enlarged inset of the corner stacking rib
 - `jig_plate_<version>_tech_top.png` — dimensioned top plan view, including
   the debossed branding footprint
 - `jig_plate_<version>_tech_front.png` — front elevation (hidden bottom bores
