@@ -77,8 +77,8 @@ Run the CLI before and after every change and report the comparison.
 
 ## Git
 
-- Tags are bare `x.y.z`. Older tags (`v0.1.0` to `v3.0.0`) carry a `v`
-  prefix and stay as they are. There is no `RELEASING.md`.
+- Older tags (`v0.1.0` to `v3.0.0`) carry a `v` prefix and stay as they
+  are. There is no `RELEASING.md`.
 - The default branch is `main`, so PRs into `develop` or a release branch
   don't auto-close issues; close those by hand.
 
