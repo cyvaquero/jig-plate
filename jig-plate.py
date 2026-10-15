@@ -653,6 +653,20 @@ Changelog
          byte-identical to 3.0.7; both meshes watertight; diagram PNG
          inspected (no crossings, no label overlaps); full suite passes;
          the new test fails with the old label position.
+  3.0.10 drawing fix, no geometry change (#37): the isometric diagram's
+         6 x 1.5 mm corner stacking rib was a few pixels under the
+         leader's dot. A dashed frame now marks it (the dot sits on the
+         frame), and a "Detail A, x6" inset redraws the corner at six
+         times the diagram's scale, labeled with its zoom and the rib's
+         size, in the empty area above the plate; its rib faces are
+         opaque so they hide the corner edges behind them. New
+         tests/test_diagram_inset.py pins the label, the true rendered
+         magnification, that the inset clears the plate and labels, and
+         that the rib faces are opaque.
+         Verified: plate and coupon STL triangle data (bytes 80+)
+         byte-identical to 3.0.7; both meshes watertight; diagram PNG
+         inspected; full suite passes; the tests fail when the zoom or
+         placement is broken.
 """
 import argparse
 import sys
@@ -675,7 +689,15 @@ def _faint(color, alpha):
     amount and made several section/body outlines nearly invisible."""
     return _to_rgba(color, alpha)
 
-VERSION = "3.0.9"
+
+def _solid(color, alpha):
+    """Opaque facecolor: `color` mixed with the background at `alpha`. Use
+    it where a face must hide the lines behind it, which _faint's
+    see-through fill doesn't."""
+    fg, bg = _to_rgba(color), _to_rgba(BG)
+    return tuple(alpha * c + (1 - alpha) * b for c, b in zip(fg[:3], bg[:3])) + (1.0,)
+
+VERSION = "3.0.10"
 OUT_DIR = Path(__file__).resolve().parent / "output"
 IMG_DIR = Path(__file__).resolve().parent / "images"
 
@@ -757,6 +779,88 @@ def add_key(ax, items, y_pos):
 
 
 # ---- plate diagram (isometric) ----
+INSET_ZOOM = 6
+INSET_FRAME_PAD_MM = 2.0
+
+
+def _corner_rib_inset(ax, geom, S):
+    """Enlarged view of the corner stacking rib ("Detail A").
+
+    The rib is 6 x 1.5 mm, a few pixels at the diagram's scale. The inset
+    redraws the origin corner (the only corner this view shows) at
+    INSET_ZOOM times the diagram's scale, in the diagram's own data units,
+    so its true magnification is exactly INSET_ZOOM. It is placed in the
+    empty area above the plate's left corner, clear of every label.
+    """
+    from matplotlib.patches import Polygon as MplPoly
+    K = S * INSET_ZOOM
+    E = ISO_Z_EXAGGERATION
+    ox, oy = geom.stack_xs[0], geom.stack_ys[0]
+    hl, hw, h = geom.stack_len / 2, geom.stack_w / 2, geom.stack_h * E
+    x1, y1 = ox + hl + INSET_FRAME_PAD_MM, oy + hw + INSET_FRAME_PAD_MM
+
+    def p(x, y, z=0.0):
+        return iso(x * K, y * K, z * K)
+
+    def rect(xa, ya, xb, yb, z):
+        return [p(xa, ya, z), p(xb, ya, z), p(xb, yb, z), p(xa, yb, z)]
+
+    # the rib's faces are opaque: it stands in front of the corner's edges
+    # and must hide them
+    polys = [
+        # corner of the top face; its two far edges are real plate edges
+        (rect(0, 0, x1, y1, 0), _faint(SHAPE, 0.16), "none"),
+        # rib: +x face, +y face (the two faces this view can see), top
+        ([p(ox + hl, oy - hw, 0), p(ox + hl, oy + hw, 0),
+          p(ox + hl, oy + hw, h), p(ox + hl, oy - hw, h)],
+         _solid(AMBER, 0.55), FG),
+        ([p(ox - hl, oy + hw, 0), p(ox + hl, oy + hw, 0),
+          p(ox + hl, oy + hw, h), p(ox - hl, oy + hw, h)],
+         _solid(AMBER, 0.4), FG),
+        (rect(ox - hl, oy - hw, ox + hl, oy + hw, h), _solid(AMBER, 0.9), FG),
+    ]
+    pts = [pt for poly, _, _ in polys for pt in poly]
+    pad = 8
+    xs, ys = [q[0] for q in pts], [q[1] for q in pts]
+    bx0, bx1, by0, by1 = min(xs) - pad, max(xs) + pad, min(ys) - pad, max(ys) + pad
+
+    # place: left edge of the diagram's data, top of it, in data units of
+    # the main axes (so the box is exactly the content size and the
+    # magnification is exactly INSET_ZOOM)
+    ax.autoscale_view()
+    xl, yl = ax.get_xlim(), ax.get_ylim()
+    w, hgt = bx1 - bx0, by1 - by0
+    left, top = xl[0], yl[1] - 0.06 * (yl[1] - yl[0])
+    axin = ax.inset_axes([left, top - hgt, w, hgt], transform=ax.transData)
+    axin.set_xlim(bx0, bx1)
+    axin.set_ylim(by0, by1)
+    axin.set_aspect("equal", adjustable="box")
+    axin.set_xticks([])
+    axin.set_yticks([])
+    axin.set_facecolor(BG)
+    for spine in axin.spines.values():
+        spine.set_edgecolor(FG)
+        spine.set_linewidth(0.7)
+    # corner fill, then its edges, then the rib on top of both
+    for i, (pts_, fc, ec) in enumerate(polys):
+        axin.add_patch(MplPoly(pts_, fc=fc, ec=ec, lw=0.7, zorder=1 if i == 0 else 3))
+    # solid: the plate's real edges; dashed: where the corner is cut away
+    axin.plot(*zip(p(x1, 0), p(0, 0), p(0, y1)), color=FG, lw=0.8, zorder=2)
+    axin.plot(*zip(p(x1, 0), p(x1, y1), p(0, y1)), color=MUTED, lw=0.7,
+              ls=(0, (3, 2)), zorder=2)
+    axin.text(0.5, 1.03,
+              f"Detail A, \u00d7{INSET_ZOOM}: corner stacking rib\n"
+              f"{geom.stack_len:g} \u00d7 {geom.stack_w:g} mm, "
+              f"{geom.stack_h:g} mm tall (height \u00d7{E} as above)",
+              transform=axin.transAxes, ha="center", va="bottom",
+              fontsize=7.5, color=FG, fontfamily="sans-serif")
+    # label the rib itself so the detail doesn't rely on color
+    axin.annotate("rib", xy=p(ox + hl, oy, h / 2), xytext=(-24, -30),
+                  textcoords="offset points", fontsize=7.5, color=FG,
+                  fontfamily="sans-serif", ha="right", va="top",
+                  arrowprops=dict(arrowstyle="-", color=MUTED, lw=0.7))
+
+
 def _plate_diagram(out_path, geom):
     from matplotlib.patches import Polygon as MplPoly, Circle as MplCircle
     S = 1.8
@@ -825,9 +929,19 @@ def _plate_diagram(out_path, geom):
     leader(ax, mag_pt, (mag_pt[0] + 135, mag_pt[1] + 10),
            "Magnet bore")
 
-    stack_pt = iso(sx0, sy0, pz)
+    # the rib is a few pixels at this scale, so the leader points at a
+    # dashed frame around it (anchor dot on the frame, off the rib) and the
+    # frame is drawn enlarged in the "Detail A" inset
+    pad = INSET_FRAME_PAD_MM * S
+    hl, hw = geom.stack_len * S / 2, geom.stack_w * S / 2
+    frame = iso_rect(sx0 - hl - pad, sy0 - hw - pad,
+                     sx0 + hl + pad, sy0 + hw + pad, pz)
+    ax.add_patch(MplPoly(frame, fc="none", ec=FG, lw=0.7, ls=(0, (2, 1.5)),
+                         zorder=5))
+    stack_pt = iso(sx0 - hl - pad, sy0 + hw + pad, pz)  # rightmost corner
     leader(ax, stack_pt, (stack_pt[0] + 60, stack_pt[1] + 55),
-           "Corner stacking rib\n(groove on underside)")
+           "Corner stacking rib A\n(groove on underside)")
+    _corner_rib_inset(ax, geom, S)
 
     ax.text(0.01, 0.01,
             f"Vertical scale ×{ISO_Z_EXAGGERATION}: plate thickness and "
