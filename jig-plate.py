@@ -627,6 +627,12 @@ Changelog
          byte-identical to 3.0.5; both meshes watertight; PNGs inspected
          before and after; each new test fails when its fix is reverted;
          full suite passes.
+  3.0.7  docs only: CLAUDE.md drops its restatement of the bare x.y.z
+         tag format (it contradicted x.y.z.h hotfix tags) and defers to
+         the global rules; the note that tags through v3.0.0 keep their
+         `v` prefix stays. Verified: plate and coupon STL triangle data
+         (bytes 80+) byte-identical to 3.0.6; both meshes watertight;
+         full test suite passes.
 """
 import argparse
 import sys
@@ -649,7 +655,7 @@ def _faint(color, alpha):
     amount and made several section/body outlines nearly invisible."""
     return _to_rgba(color, alpha)
 
-VERSION = "3.0.6"
+VERSION = "3.0.7"
 OUT_DIR = Path(__file__).resolve().parent / "output"
 IMG_DIR = Path(__file__).resolve().parent / "images"
 
