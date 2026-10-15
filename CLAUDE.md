@@ -95,9 +95,9 @@ American English in code, comments, docs and generated text.
 ## Drawings
 
 An isometric overview diagram with a ×6 corner-rib inset, and dimensioned
-technical drawings (top plan, front elevation, and a detail sheet with the
-magnet-bore and stacking-joint cross-sections). They are documentation, not
-geometry, but a drawing change is versioned like any other.
+technical drawings (top plan, front elevation, magnet-bore and stacking-joint
+detail sheet). A drawing change is versioned like any other and refreshes the
+README's copy in `docs/images/` (unversioned names), alt text included.
 
 - No view hand-tunes `set_xlim`/`set_ylim`. Most call `ax.autoscale_view()`
   plus `ax.margins()`; the two-panel detail sheet uses `_fit_view` so both

@@ -667,6 +667,11 @@ Changelog
          byte-identical to 3.0.7; both meshes watertight; diagram PNG
          inspected; full suite passes; the tests fail when the zoom or
          placement is broken.
+  3.0.11 docs only, no geometry or drawing change: the README embeds
+         the four drawings, copied to docs/images/ (unversioned names)
+         with dimensioned alt text. Verified: STL triangle data (bytes
+         80+) byte-identical to 3.0.10; both meshes watertight; full
+         test suite passes; drawings viewed.
 """
 import argparse
 import sys
@@ -697,7 +702,7 @@ def _solid(color, alpha):
     fg, bg = _to_rgba(color), _to_rgba(BG)
     return tuple(alpha * c + (1 - alpha) * b for c, b in zip(fg[:3], bg[:3])) + (1.0,)
 
-VERSION = "3.0.10"
+VERSION = "3.0.11"
 OUT_DIR = Path(__file__).resolve().parent / "output"
 IMG_DIR = Path(__file__).resolve().parent / "images"
 
