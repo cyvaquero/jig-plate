@@ -195,7 +195,7 @@ class TestParameterValidation:
         (dict(stack_play=0), r"stack_play must be >= 0\.1 mm"),  # press fit
         (dict(plate_x=300.0), "exceeds 246"),
         # derived-geometry containment (a feature exceeds the plate, or
-        # reaches a face with less than _min_wall of material left)
+        # reaches a face with less than _MIN_WALL of material left)
         (dict(mag_depth=9.5), "top or bottom face"),
         (dict(mag_d=10.0), "top or bottom face"),
         (dict(plate_z=4.0), "side-face branding"),  # branding Z-fit fires
@@ -205,7 +205,7 @@ class TestParameterValidation:
         (dict(stack_inset_x=2.0), "left/right edge"),
         (dict(stack_inset_y=0.5), "front/back edge"),
         # derived-geometry collisions (two features come within
-        # _min_wall of each other, or actually overlap)
+        # _MIN_WALL of each other, or actually overlap)
         (dict(plate_x=50.0), "comes within"),
         (dict(mag_count_x=40), "comes within"),
         (dict(mag_inset_x=12.0), "comes within"),
