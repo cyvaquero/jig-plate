@@ -175,16 +175,24 @@ class TestParameterValidation:
         (dict(plate_y=0.0), "must be positive"),
         (dict(mag_count_x=2.0), "mag_count_x must be an int"),
         (dict(mag_count_x=True), "mag_count_x must be an int"),
-        (dict(mag_d=-1.0), "mag_d must be positive"),
-        (dict(mag_depth=0.0), "mag_depth must be positive"),
-        (dict(stack_w=0.0), "stack_w must be positive"),
-        (dict(stack_len=0.0), "stack_len must be positive"),
-        (dict(stack_h=0.0), "stack_h must be positive"),
-        (dict(deboss_d=0.0), "deboss_d must be positive"),
+        # minimum printable feature sizes
+        (dict(mag_d=-1.0), r"mag_d must be >= 0\.8 mm"),
+        (dict(mag_d=0.05, mag_depth=0.05), r"mag_d must be >= 0\.8 mm"),
+        (dict(mag_depth=0.0), r"mag_depth must be >= 0\.8 mm"),
+        (dict(mag_depth=0.05), r"mag_depth must be >= 0\.8 mm"),
+        (dict(stack_w=0.0), r"stack_w must be >= 0\.8 mm"),
+        (dict(stack_w=0.05), r"stack_w must be >= 0\.8 mm"),
+        (dict(stack_len=0.0), r"stack_len must be >= 0\.8 mm"),
+        (dict(stack_len=0.05), r"stack_len must be >= 0\.8 mm"),
+        (dict(stack_h=0.0), r"stack_h must be >= 0\.8 mm"),
+        (dict(stack_h=0.05), r"stack_h must be >= 0\.8 mm"),
+        (dict(deboss_d=0.0), r"deboss_d must be >= 0\.2 mm"),
+        (dict(deboss_d=0.001), r"deboss_d must be >= 0\.2 mm"),
         (dict(back_margin=-1.0), "front_margin/back_margin must be >= 0"),
         (dict(mag_count_x=1), "mag_count_x .* must be >= 2"),
         (dict(mag_count_x=0), "mag_count_x .* must be >= 2"),
-        (dict(stack_play=-0.2), "stack_play .* must be >= 0"),
+        (dict(stack_play=-0.2), r"stack_play must be >= 0\.1 mm"),
+        (dict(stack_play=0), r"stack_play must be >= 0\.1 mm"),  # press fit
         (dict(plate_x=300.0), "exceeds 246"),
         # derived-geometry containment (a feature exceeds the plate, or
         # reaches a face with less than _min_wall of material left)
@@ -223,6 +231,14 @@ class TestParameterValidation:
     @pytest.mark.parametrize("kwargs", [
         dict(mag_count_x=6),
         dict(plate_z=12.0),
+        # exactly the minimum printable size builds
+        dict(mag_d=0.8),
+        dict(mag_depth=0.8),
+        dict(stack_w=0.8),
+        dict(stack_len=0.8),
+        dict(stack_h=0.8),
+        dict(deboss_d=0.2),
+        dict(stack_play=0.1),
     ])
     def test_valid_override_still_builds(self, kwargs):
         # a sanity check that the checks above aren't just universally
