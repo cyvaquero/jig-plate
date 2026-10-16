@@ -158,6 +158,57 @@ class TestLabel:
         assert build_plate(label=r"$\foo$").solid.is_watertight
 
 
+class TestSideBranding:
+    THIN = dict(plate_z=7, mag_d=4.1, mag_depth=2.2)
+
+    def test_thin_plate_rejected_by_default(self):
+        with pytest.raises(ValueError, match="left-face branding"):
+            build_plate(**self.THIN)
+
+    def test_thin_plate_builds_without_side_branding(self):
+        assert build_plate(side_branding=False, **self.THIN).solid.is_watertight
+
+    def test_explicit_true_matches_default(self):
+        a = build_plate().solid
+        b = build_plate(side_branding=True).solid
+        assert a.volume == b.volume
+        assert (a.vertices == b.vertices).all()
+
+    def test_false_leaves_side_faces_flat(self):
+        on = build_plate().solid
+        off = build_plate(side_branding=False).solid
+        assert off.is_watertight
+        assert off.volume > on.volume
+        # deboss floors lie at x = deboss_d (left) and plate_x - deboss_d
+        # (right); no vertex there when the side faces are flat
+        d, px = 0.3, 246.0
+        def floor(m):
+            return (abs(m.vertices[:, 0] - d) < 1e-6) | (
+                abs(m.vertices[:, 0] - (px - d)) < 1e-6)
+        assert floor(on).any()
+        assert not floor(off).any()
+
+    def test_false_keeps_top_branding(self):
+        on = build_plate()
+        off = build_plate(side_branding=False)
+        top = on.geometry.top_branding_bounds
+        assert off.geometry.top_branding_bounds == top
+        x0, y0, x1, y1 = top
+        # deboss floor vertices at z = plate_z - deboss_d inside the footprint
+        xs = off.solid.vertices
+        assert ((abs(xs[:, 2] - (9.0 - 0.3)) < 1e-6)
+                & (xs[:, 0] > x0) & (xs[:, 0] < x1)).any()
+
+    def test_false_skips_side_z_fit_check(self):
+        build_plate(plate_z=4.0, mag_d=2.0, mag_depth=1.0,
+                    side_branding=False)
+
+    @pytest.mark.parametrize("bad", [1, 0, "yes", None, 1.0])
+    def test_non_bool_rejected(self, bad):
+        with pytest.raises(ValueError, match="side_branding must be a bool"):
+            build_plate(side_branding=bad)
+
+
 class TestParameterValidation:
     """Every build_plate() input check -- each one guards a reproduced
     failure mode (a crash with an unrelated/confusing error, or a
