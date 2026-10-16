@@ -297,10 +297,10 @@ class TestMeshGeometry:
         g, solid = result.geometry, result.solid
         z = g.plate_z / 2
         for nominal_x in g.mag_xs:
-            front_centre = _cavity_center_x(solid, 0.5, z, nominal_x)
-            back_centre = _cavity_center_x(solid, g.plate_y - 0.5, z, nominal_x)
-            assert front_centre == pytest.approx(nominal_x, abs=0.05)
-            assert back_centre == pytest.approx(front_centre, abs=0.05)
+            front_center = _cavity_center_x(solid, 0.5, z, nominal_x)
+            back_center = _cavity_center_x(solid, g.plate_y - 0.5, z, nominal_x)
+            assert front_center == pytest.approx(nominal_x, abs=0.05)
+            assert back_center == pytest.approx(front_center, abs=0.05)
 
     def test_between_front_magnet_bores_is_solid(self):
         result = build_plate()
@@ -438,10 +438,10 @@ class TestMeshGeometry:
             front_zs = sorted(front_locs[:, 2])
             back_zs = sorted(back_locs[:, 2])
             # crossings: [bottom face, bore bottom, bore top, top face]
-            front_centre = (front_zs[1] + front_zs[2]) / 2
-            back_centre = (back_zs[1] + back_zs[2]) / 2
-            assert front_centre == pytest.approx(g.plate_z / 2, abs=1e-3)
-            assert back_centre == pytest.approx(front_centre, abs=1e-3)
+            front_center = (front_zs[1] + front_zs[2]) / 2
+            back_center = (back_zs[1] + back_zs[2]) / 2
+            assert front_center == pytest.approx(g.plate_z / 2, abs=1e-3)
+            assert back_center == pytest.approx(front_center, abs=1e-3)
 
     def test_right_face_text_is_not_reversed(self):
         # 2.2.1 fixed a bug where the right-face deboss was effectively a
@@ -555,7 +555,7 @@ class TestGeometryPositions:
     """CLAUDE.md design constraints that must not regress."""
 
     @pytest.mark.parametrize("mag_count_x", [2, 3, 4, 5])
-    def test_magnet_bores_symmetric_about_x_centreline(self, mag_count_x):
+    def test_magnet_bores_symmetric_about_x_centerline(self, mag_count_x):
         geom = build_plate(mag_count_x=mag_count_x).geometry
         center = geom.plate_x / 2
         offsets = sorted(abs(x - center) for x in geom.mag_xs)
