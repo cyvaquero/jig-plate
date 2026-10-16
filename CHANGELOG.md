@@ -34,6 +34,18 @@ never changes -- it isn't one of the three.
 
 ---
 
+## 3.0.17 — Faster text-orientation tests
+
+Iterative (unreleased). Tests only; the plate and coupon geometry are
+unchanged from 3.0.11 (triangle data byte-identical).
+
+### Changed
+- The four tests that check the debossed logo and label read the right way
+  round scan only the area the deboss covers, found from the mesh's own
+  cut floor, instead of the whole face. The full test suite runs in about
+  6 s instead of 13-14 s, and each test still fails when its face's text
+  is mirrored (#48).
+
 ## 3.0.16 — Optional side-face branding for thin plates
 
 Iterative (unreleased). Plate and coupon geometry at the defaults are
