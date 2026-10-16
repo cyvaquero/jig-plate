@@ -31,7 +31,8 @@ below.
   override with `--label`) recessed into the top face's front frame edge,
   duplicated on the left and right faces (each mirrored to read correctly
   from its own side) for readability when plates are stacked or stored on
-  edge
+  edge; the side copies can be turned off in the library with
+  `side_branding=False`
 - **Test coupon** — a corner piece carrying the stacking rib/groove, its
   bottom mounting magnet, and (at the default `mag_xs`) the rightmost front
   push-fit bore, which also falls inside this corner's cut region -- for
@@ -188,6 +189,17 @@ naming the parameter and its minimum: `mag_d`, `mag_depth`, `stack_w`,
 0.4 mm nozzle), `deboss_d` at least 0.2 mm (one layer at a 0.2 mm layer
 height), and `stack_play` at least 0.1 mm (0 is a press fit that won't seat
 on FDM prints).
+
+The left- and right-face branding is a fixed 4 mm tall, so by default a
+`plate_z` below about 7.4 mm is rejected with a `ValueError`. For a thinner
+plate pass `side_branding=False`: the side faces stay plain and neither the
+side-face Z-fit check nor the side-face keep-out boxes apply, while the
+top-face branding is unchanged. `side_branding` must be a `bool`; any other
+type (including `0`/`1`) raises `ValueError`.
+
+```python
+build_plate(plate_z=7, mag_d=4.1, mag_depth=2.2, side_branding=False)
+```
 
 ## Printing notes
 

@@ -704,6 +704,15 @@ Changelog
          an entry for every iterative change from 3.0.1 on. Verified:
          STL triangle data (bytes 80+) byte-identical to 3.0.11; both
          meshes watertight; full test suite passes.
+  3.0.16 build_plate(side_branding=True) (#7): library-only switch; False
+         omits the left/right-face deboss and its Z-fit check and
+         keep-out boxes, so plates thinner than about 7.4 mm (which the
+         fixed 4 mm side text rejected) can be built. Top-face branding
+         is unchanged; non-bool values raise ValueError. The CLI is
+         unchanged. Verified: STL triangle data (bytes 80+) byte-identical
+         to 3.0.11 at the default; both meshes watertight; plate_z=7 with
+         side_branding=False builds watertight and still raises without
+         it; new tests pass and fail under mutation.
 """
 import argparse
 import sys
@@ -734,7 +743,7 @@ def _solid(color, alpha):
     fg, bg = _to_rgba(color), _to_rgba(BG)
     return tuple(alpha * c + (1 - alpha) * b for c, b in zip(fg[:3], bg[:3])) + (1.0,)
 
-VERSION = "3.0.15"
+VERSION = "3.0.16"
 OUT_DIR = Path(__file__).resolve().parent / "output"
 IMG_DIR = Path(__file__).resolve().parent / "images"
 

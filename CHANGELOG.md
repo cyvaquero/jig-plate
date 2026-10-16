@@ -34,6 +34,19 @@ never changes -- it isn't one of the three.
 
 ---
 
+## 3.0.16 — Optional side-face branding for thin plates
+
+Iterative (unreleased). Plate and coupon geometry at the defaults are
+unchanged from 3.0.11 (triangle data byte-identical).
+
+### Added
+- `build_plate(side_branding=True)` (#7): pass `False` to leave the left and
+  right faces plain. The side marks are a fixed 4 mm tall, so they forced
+  `plate_z` to about 7.4 mm or more even when nothing mechanical needed it;
+  with `side_branding=False` a thinner plate such as `plate_z=7` builds. The
+  top-face branding is unchanged, and a non-bool value raises `ValueError`.
+  The CLI has no flag for it and is unchanged.
+
 ## 3.0.15 — Test docstring describes the CHANGELOG correctly
 
 Iterative (unreleased). Test docstring only; the plate and coupon geometry
