@@ -713,6 +713,13 @@ Changelog
          to 3.0.11 at the default; both meshes watertight; plate_z=7 with
          side_branding=False builds watertight and still raises without
          it; new tests pass and fail under mutation.
+  3.0.17 tests only (#48): the four text-orientation tests bound their
+         contains() probe grid by the mesh's own deboss-floor vertices
+         (padded 1 mm) instead of scanning the whole face; suite 13-14 s
+         -> about 6 s. Verified: mirroring each face's deboss (parity kept,
+         so the mesh stays a volume) fails only that face's test(s);
+         STL triangle data (bytes 80+) byte-identical to 3.0.11; both
+         meshes watertight; full test suite passes.
 """
 import argparse
 import sys
@@ -743,7 +750,7 @@ def _solid(color, alpha):
     fg, bg = _to_rgba(color), _to_rgba(BG)
     return tuple(alpha * c + (1 - alpha) * b for c, b in zip(fg[:3], bg[:3])) + (1.0,)
 
-VERSION = "3.0.16"
+VERSION = "3.0.17"
 OUT_DIR = Path(__file__).resolve().parent / "output"
 IMG_DIR = Path(__file__).resolve().parent / "images"
 
