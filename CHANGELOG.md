@@ -34,6 +34,18 @@ never changes -- it isn't one of the three.
 
 ---
 
+## 3.0.13 — 3.0.0 release notes list every breaking change
+
+Iterative (unreleased). Documentation only; the plate and coupon geometry
+are unchanged from 3.0.11 (triangle data byte-identical).
+
+### Fixed
+- The 3.0.0 notes now list the changes there that can break a script
+  written against 2.4.0, which they had left out: `PlateGeometry` lost its
+  `honeycomb_*` fields, `mag_xs` and `bottom_mag_ys` became tuples, and a
+  rejected `--label` exits 2 with a usage message instead of a traceback
+  (#23).
+
 ## 3.0.12 — 3.0.0 release notes match the test record
 
 Iterative (unreleased). Documentation only; the plate and coupon geometry
@@ -219,6 +231,23 @@ reversal of 2.4.0's headline feature.
   2.3.0/pre-2.3.1 — this release nets out to **no change** in the
   lightening feature versus what shipped before 2.4.0, only churn in
   between.
+- **`PlateGeometry`'s `honeycomb_*` fields** (`honeycomb_enabled`,
+  `honeycomb_skin`, `honeycomb_wall`, `honeycomb_af`,
+  `honeycomb_margin_x`, `honeycomb_margin_y`) went with the cutout. A
+  script reading `result.geometry.honeycomb_*` now gets an
+  `AttributeError`.
+
+### Changed
+
+Both can break a script written against 2.4.0:
+
+- `PlateGeometry.mag_xs` and `bottom_mag_ys` are tuples, not lists
+  (since 2.4.10), matching `stack_xs`/`stack_ys`. Changing them in place,
+  or comparing them with `== [...]`, no longer works; compare with a
+  tuple or convert with `list()`.
+- A `--label` that `build_plate()` rejects now makes the CLI print its
+  usage line and the error and exit with status 2, the way argparse
+  reports its own errors, instead of a Python traceback and status 1.
 
 ### Added
 
