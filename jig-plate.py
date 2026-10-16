@@ -699,6 +699,11 @@ Changelog
          entries keep their wording. Verified: STL triangle data (bytes
          80+) byte-identical to 3.0.11; both meshes watertight; full
          test suite passes.
+  3.0.15 test docstring only (#30): TestParameterValidation no longer
+         says CHANGELOG.md records only major/minor releases; it has
+         an entry for every iterative change from 3.0.1 on. Verified:
+         STL triangle data (bytes 80+) byte-identical to 3.0.11; both
+         meshes watertight; full test suite passes.
 """
 import argparse
 import sys
@@ -729,7 +734,7 @@ def _solid(color, alpha):
     fg, bg = _to_rgba(color), _to_rgba(BG)
     return tuple(alpha * c + (1 - alpha) * b for c, b in zip(fg[:3], bg[:3])) + (1.0,)
 
-VERSION = "3.0.14"
+VERSION = "3.0.15"
 OUT_DIR = Path(__file__).resolve().parent / "output"
 IMG_DIR = Path(__file__).resolve().parent / "images"
 

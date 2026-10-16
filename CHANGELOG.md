@@ -34,6 +34,16 @@ never changes -- it isn't one of the three.
 
 ---
 
+## 3.0.15 — Test docstring describes the CHANGELOG correctly
+
+Iterative (unreleased). Test docstring only; the plate and coupon geometry
+are unchanged from 3.0.11 (triangle data byte-identical).
+
+### Fixed
+- The parameter-validation tests' docstring no longer says this file
+  records only major and minor releases; it has an entry for every
+  iterative change from 3.0.1 on (#30).
+
 ## 3.0.14 — American spelling
 
 Iterative (unreleased). Spelling only; the plate and coupon geometry are
