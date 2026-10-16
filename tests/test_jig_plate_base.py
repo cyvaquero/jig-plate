@@ -64,6 +64,31 @@ def _split_by_largest_gap(points, split_axis, expected_gap=None):
     return cluster1, cluster2
 
 
+def _deboss_scan_grid(solid, floor_axis, floor_at, probe_at, step=0.3,
+                      pad=1.0):
+    """Grid of probe points covering every debossed cavity on one face,
+    at `probe_at` along `floor_axis` (0=x, 1=y, 2=z). The window is the
+    bounding box, padded by `pad`, of the mesh's own vertices on the
+    deboss floor plane (`floor_axis` == `floor_at`) -- read off the
+    solid, not the PlateGeometry record, so a cut landing somewhere
+    unexpected still widens the window to include it. Scanning the whole
+    face instead costs seconds of contains() per test for the same
+    clusters."""
+    v = solid.vertices
+    floor = v[np.abs(v[:, floor_axis] - floor_at) < 1e-4]
+    assert len(floor), f"no deboss floor vertices at axis {floor_axis} = {floor_at}"
+    a, b = (ax for ax in range(3) if ax != floor_axis)
+    ra = np.arange(floor[:, a].min() - pad, floor[:, a].max() + pad, step)
+    rb = np.arange(floor[:, b].min() - pad, floor[:, b].max() + pad, step)
+    pts = []
+    for ca in ra:
+        for cb in rb:
+            p = [0.0, 0.0, 0.0]
+            p[floor_axis], p[a], p[b] = probe_at, ca, cb
+            pts.append(tuple(p))
+    return pts
+
+
 def _debossed_cavity_clusters(solid, points, split_axis):
     """Scan `points` for debossed cavities (not solid.contains()) and
     split them into two clusters at the largest gap along `split_axis`
@@ -507,10 +532,9 @@ class TestMeshGeometry:
         # trusting the sign convention documented in a comment.
         result = build_plate()
         g, solid = result.geometry, result.solid
-        probe_x = g.plate_x - g.deboss_d / 2
-        y_samples = np.arange(1.0, g.plate_y - 1.0, 0.3)
-        z_samples = np.arange(1.0, g.plate_z - 0.5, 0.3)
-        pts = [(probe_x, y, z) for y in y_samples for z in z_samples]
+        pts = _deboss_scan_grid(
+            solid, 0, g.plate_x - g.deboss_d, g.plate_x - g.deboss_d / 2
+        )
         cluster1, cluster2 = _debossed_cavity_clusters(solid, pts, split_axis=1)
         # the logo's dome reaches higher (taller) than any text glyph, so
         # whichever cluster is taller is the logo -- confirms the split
@@ -528,10 +552,7 @@ class TestMeshGeometry:
         # HIGHER Y than the text -- reversed from the right face's check.
         result = build_plate()
         g, solid = result.geometry, result.solid
-        probe_x = g.deboss_d / 2
-        y_samples = np.arange(1.0, g.plate_y - 1.0, 0.3)
-        z_samples = np.arange(1.0, g.plate_z - 0.5, 0.3)
-        pts = [(probe_x, y, z) for y in y_samples for z in z_samples]
+        pts = _deboss_scan_grid(solid, 0, g.deboss_d, g.deboss_d / 2)
         cluster1, cluster2 = _debossed_cavity_clusters(solid, pts, split_axis=1)
         taller, shorter = (
             (cluster1, cluster2)
@@ -551,10 +572,9 @@ class TestMeshGeometry:
         # text being individually reversed, which this can't see.
         result = build_plate()
         g, solid = result.geometry, result.solid
-        probe_z = g.plate_z - g.deboss_d / 2
-        x_samples = np.arange(1.0, g.plate_x - 1.0, 0.3)
-        y_samples = np.arange(0.5, g.front_margin + 5.0, 0.3)
-        pts = [(x, y, probe_z) for x in x_samples for y in y_samples]
+        pts = _deboss_scan_grid(
+            solid, 2, g.plate_z - g.deboss_d, g.plate_z - g.deboss_d / 2
+        )
         cluster1, cluster2 = _debossed_cavity_clusters(solid, pts, split_axis=0)
         # the logo (_lw=6mm wide) is much narrower in X than the label
         # text, so whichever cluster is narrower is the logo -- confirms
@@ -576,10 +596,9 @@ class TestMeshGeometry:
         # order being tested.
         result = build_plate(label="IW")
         g, solid = result.geometry, result.solid
-        probe_z = g.plate_z - g.deboss_d / 2
-        x_samples = np.arange(1.0, g.plate_x - 1.0, 0.3)
-        y_samples = np.arange(0.5, g.front_margin + 5.0, 0.3)
-        pts = [(x, y, probe_z) for x in x_samples for y in y_samples]
+        pts = _deboss_scan_grid(
+            solid, 2, g.plate_z - g.deboss_d, g.plate_z - g.deboss_d / 2
+        )
         logo_cluster, text_cluster = _debossed_cavity_clusters(
             solid, pts, split_axis=0
         )
