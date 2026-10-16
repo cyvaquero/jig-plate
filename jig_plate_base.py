@@ -231,7 +231,7 @@ def build_plate(
     bottom_mag_inset_x=12.0,
     stack_w=1.5, stack_len=6.0, stack_h=1.5, stack_play=0.2,
     stack_inset_x=4.0, stack_inset_y=4.0,
-    label="Jig Plate", deboss_d=0.3,
+    label="Jig Plate", deboss_d=0.3, side_branding=True,
 ):
     """Build the jig plate base solid.
 
@@ -260,6 +260,14 @@ def build_plate(
     `stack_play` >= 0.1 mm (0 is a press fit that won't seat on FDM
     prints).
 
+    `side_branding` (default True) debosses the logo and label on the left
+    and right faces as well as the top face. Those side marks are a fixed
+    4 mm tall, so they need a `plate_z` of roughly 7.4 mm or more; pass
+    `side_branding=False` for a thinner plate. With False, the left and
+    right faces stay flat, and there is no side-face Z-fit check or
+    side-face keep-out box. The top-face branding is unaffected. A
+    non-bool value raises `ValueError`.
+
     Returns a `PlateResult` (`.solid`: trimesh.Trimesh, `.geometry`:
     PlateGeometry). Pure -- no file I/O, no argv, no printing.
     """
@@ -277,6 +285,11 @@ def build_plate(
             f"label {label!r} contains characters with no glyph in the "
             f"debossed font (DejaVu Sans), which would deboss as visible "
             f"placeholder boxes instead: {_bad_chars!r}"
+        )
+
+    if not isinstance(side_branding, bool):
+        raise ValueError(
+            f"side_branding must be a bool, got {side_branding!r}"
         )
 
     for _name, _value in (
@@ -400,27 +413,29 @@ def build_plate(
     # left/right faces deboss the *same* logo+text polygons (see
     # _add_deboss_left/_add_deboss_right below) through different
     # transforms, so only one pair needs computing.
-    _side_logo = _logo_polys(_sx_left + _lw / 2, plate_z / 2 + 0.4)
-    _side_text = _text_polys(
-        label, 4.0, _sx_left + _lw + 3.0 - _tx0, plate_z / 2 - 2.0
-    )
-    _side_all = _side_logo + _side_text
-    _side_x0 = min(p.bounds[0] for p in _side_all)  # -> world Y
-    _side_x1 = max(p.bounds[2] for p in _side_all)
-    _side_z0 = min(p.bounds[1] for p in _side_all)  # -> world Z directly
-    _side_z1 = max(p.bounds[3] for p in _side_all)
-
-    # Kept although the feature-box check below also rejects these cases
-    # (a Z overrun trips the 0.8 mm wall test on the side-face branding
-    # box): this one names the cause (increase plate_z) instead of a
-    # generic containment failure.
-    if _side_z0 < 0 or _side_z1 > plate_z:
-        raise ValueError(
-            f"side-face branding (logo + label {label!r}) spans Z "
-            f"[{_side_z0:.2f}, {_side_z1:.2f}] mm, which doesn't "
-            f"fit within the plate's thickness [0, {plate_z}] -- increase "
-            "plate_z"
+    _side_logo = _side_text = []
+    if side_branding:
+        _side_logo = _logo_polys(_sx_left + _lw / 2, plate_z / 2 + 0.4)
+        _side_text = _text_polys(
+            label, 4.0, _sx_left + _lw + 3.0 - _tx0, plate_z / 2 - 2.0
         )
+        _side_all = _side_logo + _side_text
+        _side_x0 = min(p.bounds[0] for p in _side_all)  # -> world Y
+        _side_x1 = max(p.bounds[2] for p in _side_all)
+        _side_z0 = min(p.bounds[1] for p in _side_all)  # -> world Z directly
+        _side_z1 = max(p.bounds[3] for p in _side_all)
+
+        # Kept although the feature-box check below also rejects these cases
+        # (a Z overrun trips the 0.8 mm wall test on the side-face branding
+        # box): this one names the cause (increase plate_z) instead of a
+        # generic containment failure.
+        if _side_z0 < 0 or _side_z1 > plate_z:
+            raise ValueError(
+                f"side-face branding (logo + label {label!r}) spans Z "
+                f"[{_side_z0:.2f}, {_side_z1:.2f}] mm, which doesn't "
+                f"fit within the plate's thickness [0, {plate_z}] -- increase "
+                "plate_z"
+            )
 
     # Every mechanical feature (magnet bores, stacking rib/groove,
     # debossed branding) as an axis-aligned bounding box, checked for
@@ -497,18 +512,19 @@ def build_plate(
         (_top_x0, _top_y0, plate_z - deboss_d, _top_x1, _top_y1, plate_z),
         _plate_bounds, {"z_max"},
     ))
-    _features.append((
-        f"left-face branding (logo + label {label!r})",
-        (0.0, plate_y - _side_x1, _side_z0,
-         deboss_d, plate_y - _side_x0, _side_z1),
-        _plate_bounds, {"x_min"},
-    ))
-    _features.append((
-        f"right-face branding (logo + label {label!r})",
-        (plate_x - deboss_d, _side_x0, _side_z0,
-         plate_x, _side_x1, _side_z1),
-        _plate_bounds, {"x_max"},
-    ))
+    if side_branding:
+        _features.append((
+            f"left-face branding (logo + label {label!r})",
+            (0.0, plate_y - _side_x1, _side_z0,
+             deboss_d, plate_y - _side_x0, _side_z1),
+            _plate_bounds, {"x_min"},
+        ))
+        _features.append((
+            f"right-face branding (logo + label {label!r})",
+            (plate_x - deboss_d, _side_x0, _side_z0,
+             plate_x, _side_x1, _side_z1),
+            _plate_bounds, {"x_max"},
+        ))
 
     _eps = 1e-6  # floating-point noise only, on boundaries allowed to touch
 
@@ -628,14 +644,15 @@ def build_plate(
                 )
             )
 
-    # ---- debossed branding cuts (top, left, right faces) -- reusing
-    # the exact polygons already validated above, not recomputed ----
+    # ---- debossed branding cuts (top; left/right when side_branding) --
+    # reusing the exact polygons already validated above, not recomputed ----
     _add_deboss(_top_logo, scribes, plate_z, deboss_d)
     _add_deboss(_top_text, scribes, plate_z, deboss_d)
-    _add_deboss_left(_side_logo, scribes, plate_y, deboss_d)
-    _add_deboss_left(_side_text, scribes, plate_y, deboss_d)
-    _add_deboss_right(_side_logo, scribes, plate_x, plate_y, deboss_d)
-    _add_deboss_right(_side_text, scribes, plate_x, plate_y, deboss_d)
+    if side_branding:
+        _add_deboss_left(_side_logo, scribes, plate_y, deboss_d)
+        _add_deboss_left(_side_text, scribes, plate_y, deboss_d)
+        _add_deboss_right(_side_logo, scribes, plate_x, plate_y, deboss_d)
+        _add_deboss_right(_side_text, scribes, plate_x, plate_y, deboss_d)
 
     plate = bx(0, 0, 0, plate_x, plate_y, plate_z)
     solid = trimesh.boolean.difference([plate] + cuts, engine="manifold")
