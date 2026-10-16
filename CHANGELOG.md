@@ -44,6 +44,43 @@ are unchanged from 3.0.11 (triangle data byte-identical).
   records only major and minor releases; it has an entry for every
   iterative change from 3.0.1 on (#30).
 
+## 3.0.14 — American spelling
+
+Iterative (unreleased). Spelling only; the plate and coupon geometry are
+unchanged from 3.0.11 (triangle data byte-identical).
+
+### Fixed
+- Code comments, docstrings, test comments and names, and the README use
+  American spelling, the repo's convention: center, centered, centerline,
+  labeled, neighbor. No drawing text changed. Historical entries in this
+  file keep their original wording (#26).
+
+## 3.0.13 — 3.0.0 release notes list every breaking change
+
+Iterative (unreleased). Documentation only; the plate and coupon geometry
+are unchanged from 3.0.11 (triangle data byte-identical).
+
+### Fixed
+- The 3.0.0 notes now list the changes there that can break a script
+  written against 2.4.0, which they had left out: `PlateGeometry` lost its
+  `honeycomb_*` fields, `mag_xs` and `bottom_mag_ys` became tuples, and a
+  rejected `--label` exits 2 with a usage message instead of a traceback
+  (#23).
+
+## 3.0.12 — 3.0.0 release notes match the test record
+
+Iterative (unreleased). Documentation only; the plate and coupon geometry
+are unchanged from 3.0.11 (triangle data byte-identical).
+
+### Fixed
+- The 3.0.0 notes (this file and the generator docstring) no longer claim
+  every test was mutation-tested: many were, as each iterative entry notes,
+  and the gaps later review found were closed in 3.0.3 and 3.0.6. The
+  review rounds are given as 2.4.6–2.4.12, and the test history now says
+  the first 32 tests came with 2.4.4. The 2.4.12 entry's "fails exactly the
+  5 tests" was true then (rerun: 5 fail at 2.4.12) and now adds that the
+  same mutation fails 4 at 3.0.0 (#22).
+
 ## 3.0.11 — Drawings in the README
 
 Iterative (unreleased). Documentation only; the plate and coupon geometry
@@ -200,8 +237,8 @@ coupon geometry are unchanged from 3.0.0 (triangle data byte-identical).
 ## 3.0.0 — Lightening cutout reverted; derived-geometry validation
 
 Major release. Folds iterative changes 2.4.1–2.4.13 into a versioned
-release — six rounds of independent code review plus a full reversal of
-2.4.0's headline feature.
+release — the independent code-review rounds of 2.4.6–2.4.12 plus a full
+reversal of 2.4.0's headline feature.
 
 ### Removed
 
@@ -215,6 +252,23 @@ release — six rounds of independent code review plus a full reversal of
   2.3.0/pre-2.3.1 — this release nets out to **no change** in the
   lightening feature versus what shipped before 2.4.0, only churn in
   between.
+- **`PlateGeometry`'s `honeycomb_*` fields** (`honeycomb_enabled`,
+  `honeycomb_skin`, `honeycomb_wall`, `honeycomb_af`,
+  `honeycomb_margin_x`, `honeycomb_margin_y`) went with the cutout. A
+  script reading `result.geometry.honeycomb_*` now gets an
+  `AttributeError`.
+
+### Changed
+
+Both can break a script written against 2.4.0:
+
+- `PlateGeometry.mag_xs` and `bottom_mag_ys` are tuples, not lists
+  (since 2.4.10), matching `stack_xs`/`stack_ys`. Changing them in place,
+  or comparing them with `== [...]`, no longer works; compare with a
+  tuple or convert with `list()`.
+- A `--label` that `build_plate()` rejects now makes the CLI print its
+  usage line and the error and exit with status 2, the way argparse
+  reports its own errors, instead of a Python traceback and status 1.
 
 ### Added
 
@@ -271,13 +325,15 @@ release — six rounds of independent code review plus a full reversal of
 
 ### Test suite
 
-Grew from 0 tests at 2.4.0 to 86, added across all six review rounds
-and largely built against the actual mesh (ray-casting, `contains()`)
-rather than the input parameters, so a bug in the real boolean geometry
-can't hide behind metadata that merely echoes its inputs. Every check
-added this range was verified, by temporarily reintroducing the bug it
-targets, to actually fail — not just pass regardless of the underlying
-geometry.
+Grew from 0 tests at 2.4.0 to 86. The first 32 came with 2.4.4 (25
+survived the 2.4.5 revert); the rest were added across the review rounds
+of 2.4.6–2.4.12. They are largely built against the actual mesh
+(ray-casting, `contains()`) rather than the input parameters, so a bug in
+the real boolean geometry can't hide behind metadata that merely echoes
+its inputs. Many checks were mutation-tested (the bug they target
+temporarily reintroduced to confirm they fail), as each iterative entry
+notes, but not all: later review found mutations the suite didn't catch,
+closed in 3.0.3 and 3.0.6.
 
 ### Why a major bump
 
