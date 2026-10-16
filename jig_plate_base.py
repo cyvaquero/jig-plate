@@ -248,7 +248,7 @@ def build_plate(
 
     `stack_play` gives the rib/groove fit clearance on all three axes, but
     not symmetrically: X and Y split it in half, `stack_play / 2` per side,
-    since the rib can land off-centre in the groove either way; Z applies
+    since the rib can land off-center in the groove either way; Z applies
     it in full, since the groove only has one closed side -- its floor --
     for the rib to bottom out against, while the other "side" is the open
     mouth at the plate's bottom face, which needs no clearance of its own.
@@ -479,7 +479,7 @@ def build_plate(
                 (0.0, 0.0, 0.0, plate_x, plate_y, None), set(),
             ))
             # stack_play splits across X and Y (play/2 per side) since the
-            # rib can land off-centre in the groove on either axis -- but
+            # rib can land off-center in the groove on either axis -- but
             # applies in full to Z, since the groove only has one closed
             # side (its floor) for the rib to bottom out against; the
             # other "side" is the open mouth at the plate's bottom face,
