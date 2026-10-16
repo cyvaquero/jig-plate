@@ -34,6 +34,17 @@ never changes -- it isn't one of the three.
 
 ---
 
+## 3.0.14 — American spelling
+
+Iterative (unreleased). Spelling only; the plate and coupon geometry are
+unchanged from 3.0.11 (triangle data byte-identical).
+
+### Fixed
+- Code comments, docstrings, test comments and names, and the README use
+  American spelling, the repo's convention: center, centered, centerline,
+  labeled, neighbor. No drawing text changed. Historical entries in this
+  file keep their original wording (#26).
+
 ## 3.0.13 — 3.0.0 release notes list every breaking change
 
 Iterative (unreleased). Documentation only; the plate and coupon geometry

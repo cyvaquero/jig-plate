@@ -181,10 +181,10 @@ Changelog
          with an unrelated AttributeError.
          (2) the magnet-bore detail drawing no longer hatches 2 mm of air
          in front of the plate's front face -- the material region now
-         starts exactly at the face (y=0); the dashed centreline leader
+         starts exactly at the face (y=0); the dashed centerline leader
          still extends slightly past it for visual clarity, unchanged.
          (3) the corner stacking groove was 1.6 mm deep, not the
-         documented/labelled 1.5 mm -- a stray +0.1 mm overcut at the top
+         documented/labeled 1.5 mm -- a stray +0.1 mm overcut at the top
          of the cut (left over from the punch-through-cut pattern used
          elsewhere, not needed for this interior blind pocket) is
          removed. Verified via ray-cast measurement on the mesh, not just
@@ -226,9 +226,9 @@ Changelog
          version stayed green while the new one correctly fails.
          (3) "front and back bores share X positions" (CLAUDE.md) had no
          test that could actually catch a regression: a contains()-at-
-         centre probe has ~3 mm of slack from the bore radius, so a 2 mm
+         center probe has ~3 mm of slack from the bore radius, so a 2 mm
          X shift on one side still lands inside the moved cavity. Added
-         a test that measures each side's cavity centre independently by
+         a test that measures each side's cavity center independently by
          ray-casting and compares them to each other; verified (with the
          same reproduced 2 mm-shift mutation) that it now fails where
          the old contains()-based test didn't.
@@ -291,7 +291,7 @@ Changelog
          Verified still watertight; 38/38 tests pass.
   2.4.9  fixes from a fourth round of independent code review:
          (1) top-plan front/back magnet bores were drawn as circles
-         centred on the plate edge -- half the circle rendered outside
+         centered on the plate edge -- half the circle rendered outside
          the part. They're blind horizontal bores, not through-holes;
          seen from above a blind bore projects as a mag_d x mag_depth
          rectangle starting at the face and receding inward, so redrawn
@@ -446,8 +446,8 @@ Changelog
          for why a drawing-only change alone wouldn't bump anything):
          every "Scale N:1" label across all four drawings is deleted --
          S is a coordinate multiplier that cancels out under equal-
-         aspect autoscaling, so the labelled scale was never the actual
-         one (measured: labelled 2:1/10:1/45:1/22:1, actual around
+         aspect autoscaling, so the labeled scale was never the actual
+         one (measured: labeled 2:1/10:1/45:1/22:1, actual around
          0.74:1/1.2:1/5:1/5:1) -- a screen render doesn't have a
          meaningful physical scale to state, and the dimension figures
          on each drawing are what's accurate regardless. The _faint()
@@ -507,7 +507,7 @@ Changelog
          but weren't -- bore *positions* are symmetric so plates still
          line up geometrically when turned 180 degrees, but a fixed
          front/back polarity convention only attracts an unrotated
-         neighbour; reworded both to say so explicitly rather than
+         neighbor; reworded both to say so explicitly rather than
          changing the (still undecided) physical polarity design. The
          test-coupon bullet left out that the coupon also carries the
          rightmost front push-fit bore at default mag_xs, which is what
@@ -545,7 +545,7 @@ Changelog
          material above the groove at every corner, this is a safe
          direction to move even without a fresh print/stack test of this
          exact depth. stack_play splits in half per side across X/Y (the
-         rib can land off-centre in the groove either way) but applies
+         rib can land off-center in the groove either way) but applies
          in full to Z (the groove has only one closed side, its floor,
          for the rib to bottom out against) -- documented in
          build_plate()'s and this groove-feature check's own comments,
@@ -690,6 +690,15 @@ Changelog
          a traceback. Each checked against `git diff v2.4.0 v3.0.0`.
          Verified: STL triangle data (bytes 80+) byte-identical to
          3.0.11; both meshes watertight; full test suite passes.
+  3.0.14 spelling only (#26): American English in comments, docstrings
+         (including this Changelog block), test comments, test
+         identifiers and the README: centre/centred/centreline, labelled
+         and neighbour(s) become center/centered/centerline, labeled and
+         neighbor(s). None of
+         them was rendered into a drawing. CHANGELOG.md's historical
+         entries keep their wording. Verified: STL triangle data (bytes
+         80+) byte-identical to 3.0.11; both meshes watertight; full
+         test suite passes.
 """
 import argparse
 import sys
@@ -720,7 +729,7 @@ def _solid(color, alpha):
     fg, bg = _to_rgba(color), _to_rgba(BG)
     return tuple(alpha * c + (1 - alpha) * b for c, b in zip(fg[:3], bg[:3])) + (1.0,)
 
-VERSION = "3.0.13"
+VERSION = "3.0.14"
 OUT_DIR = Path(__file__).resolve().parent / "output"
 IMG_DIR = Path(__file__).resolve().parent / "images"
 
@@ -1109,7 +1118,7 @@ def _title_block(ax, title):
     # handed to matplotlib, and every one of these axes is equal-aspect
     # and autoscaled to fit the figure -- so S cancels out of the
     # rendered image entirely and any "Scale" figure quoting it is
-    # fiction (measured on the actual renders: labelled 2:1, 10:1, 45:1
+    # fiction (measured on the actual renders: labeled 2:1, 10:1, 45:1
     # and 22:1, actual were closer to 0.74:1, 1.2:1, 5:1 and 5:1). A
     # screen render doesn't have a meaningful physical scale to state;
     # the dimension figures on the drawing itself are what's accurate.
@@ -1135,7 +1144,7 @@ def _tech_top_plan(out_path, geom):
     # horizontally inward from the Y face, not through-holes, so seen
     # from directly above they project as a mag_d (X) x mag_depth (Y)
     # rectangle starting at the face and receding into the material,
-    # not a circle centred on the edge (half of which would render
+    # not a circle centered on the edge (half of which would render
     # outside the part). Hidden from this top-down view past the
     # entrance, so dashed like the bottom-face bores below.
     for mx in geom.mag_xs:
@@ -1473,7 +1482,7 @@ def _tech_detail(out_path, geom, magnet_d=MAGNET_D, magnet_len=MAGNET_LEN):
     _dim_h(ax2, 0, det_x0 * S2, (rib_x0 - play) * S2,
            f"{groove_edge_clearance:.1f}", offset=3 * S2, fontsize=6.5)
 
-    # bottom-corner mounting bore -- sectioned through its own centre, so
+    # bottom-corner mounting bore -- sectioned through its own center, so
     # the vertical cylinder shows as a mag_d (X) x mag_depth (Z) rectangle
     # sitting on the bottom face, same convention the magnet-bore-detail
     # panel (left) uses for the horizontal push-fit bores. This is the
@@ -1571,7 +1580,7 @@ def main():
     # is sized to fully contain the rib/groove and the bottom mounting
     # bore at the default stack_inset_x/_y and bottom_mag_inset_x -- if
     # either inset grows much *larger* (feature moves farther from this
-    # corner, toward the plate's centre), re-check that both stay fully
+    # corner, toward the plate's center), re-check that both stay fully
     # inside SC_X0/SC_Y1 below; a smaller inset only pulls a feature
     # closer to the corner, deeper inside the window, not out of it.
     STACK_COUPON = OUT_DIR / f"jig_plate_{VERSION}_stack_coupon.stl"
