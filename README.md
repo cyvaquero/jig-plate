@@ -6,7 +6,7 @@ pocket geometry of its own — pockets for a specific blank (business cards,
 tags, coasters, whatever) get added to this base in a separate script.
 
 `jig-plate.py` generates the base plate and a corner test coupon as
-watertight binary STL, plus a labelled diagram and dimensioned technical
+watertight binary STL, plus a labeled diagram and dimensioned technical
 drawings. The actual plate geometry lives in the importable
 `jig_plate_base.py` library, so another generator script can build on this
 base plate without running the CLI — see [Using it as a library](#using-it-as-a-library)
@@ -20,11 +20,11 @@ below.
   outer footprint rather than any pocket layout, so plates holding different
   blanks still stack together
 - **8 magnet bores** (Ø6.1 mm, push-fit for 6 × 3 mm magnets) in the front and
-  back faces, symmetric about the centreline so a plate's bore *positions*
-  still line up with its neighbours' if it's turned 180° -- see the polarity
+  back faces, symmetric about the centerline so a plate's bore *positions*
+  still line up with its neighbors' if it's turned 180° -- see the polarity
   note under [Printing notes](#printing-notes): the fixed front/back polarity
   convention below matches unrotated plates to each other, not a plate
-  rotated 180° to its unrotated neighbours
+  rotated 180° to its unrotated neighbors
 - **4 more magnet bores** (same Ø6.1 mm / 6 × 3 mm spec) in the bottom-face
   corners, for mounting the plate itself
 - **Debossed branding** — logo mark plus a text label (default "Jig Plate",
@@ -194,7 +194,7 @@ on FDM prints).
 - Print flat, top face up.
 - Press 6 × 3 mm magnets into the bores. Keep polarity consistent: one pole out
   on every front-face magnet, the opposite on every back-face magnet, or some
-  pairs will repel. This convention attracts an *unrotated* neighbour (the
+  pairs will repel. This convention attracts an *unrotated* neighbor (the
   common case, plates arranged front-to-back in a row); a plate turned 180°
   presents what was its back face where a front face is expected, so its
   magnets would need the opposite polarity from this rule to still attract
