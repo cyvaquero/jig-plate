@@ -46,6 +46,20 @@ are unchanged from 3.0.11 (triangle data byte-identical).
   rejected `--label` exits 2 with a usage message instead of a traceback
   (#23).
 
+## 3.0.12 — 3.0.0 release notes match the test record
+
+Iterative (unreleased). Documentation only; the plate and coupon geometry
+are unchanged from 3.0.11 (triangle data byte-identical).
+
+### Fixed
+- The 3.0.0 notes (this file and the generator docstring) no longer claim
+  every test was mutation-tested: many were, as each iterative entry notes,
+  and the gaps later review found were closed in 3.0.3 and 3.0.6. The
+  review rounds are given as 2.4.6–2.4.12, and the test history now says
+  the first 32 tests came with 2.4.4. The 2.4.12 entry's "fails exactly the
+  5 tests" was true then (rerun: 5 fail at 2.4.12) and now adds that the
+  same mutation fails 4 at 3.0.0 (#22).
+
 ## 3.0.11 — Drawings in the README
 
 Iterative (unreleased). Documentation only; the plate and coupon geometry
@@ -202,8 +216,8 @@ coupon geometry are unchanged from 3.0.0 (triangle data byte-identical).
 ## 3.0.0 — Lightening cutout reverted; derived-geometry validation
 
 Major release. Folds iterative changes 2.4.1–2.4.13 into a versioned
-release — six rounds of independent code review plus a full reversal of
-2.4.0's headline feature.
+release — the independent code-review rounds of 2.4.6–2.4.12 plus a full
+reversal of 2.4.0's headline feature.
 
 ### Removed
 
@@ -290,13 +304,15 @@ Both can break a script written against 2.4.0:
 
 ### Test suite
 
-Grew from 0 tests at 2.4.0 to 86, added across all six review rounds
-and largely built against the actual mesh (ray-casting, `contains()`)
-rather than the input parameters, so a bug in the real boolean geometry
-can't hide behind metadata that merely echoes its inputs. Every check
-added this range was verified, by temporarily reintroducing the bug it
-targets, to actually fail — not just pass regardless of the underlying
-geometry.
+Grew from 0 tests at 2.4.0 to 86. The first 32 came with 2.4.4 (25
+survived the 2.4.5 revert); the rest were added across the review rounds
+of 2.4.6–2.4.12. They are largely built against the actual mesh
+(ray-casting, `contains()`) rather than the input parameters, so a bug in
+the real boolean geometry can't hide behind metadata that merely echoes
+its inputs. Many checks were mutation-tested (the bug they target
+temporarily reintroduced to confirm they fail), as each iterative entry
+notes, but not all: later review found mutations the suite didn't catch,
+closed in 3.0.3 and 3.0.6.
 
 ### Why a major bump
 
