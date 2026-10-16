@@ -489,7 +489,7 @@ Changelog
          anchored flush to a face (a bore's mouth, a branding cut's
          depth). Verified via mutation testing: weakening _min_wall back
          to 1e-6 fails exactly the 5 tests that depend on it and no
-         others.
+         others (at 3.0.0, after 2.4.13's deeper groove, it fails 4).
          Also fixes bundled from the same round (all documentation/
          drawing, no geometry change):
          (3) the magnet-bore-detail panel's front face (y=0) had no
@@ -569,14 +569,15 @@ Changelog
          (2.4.1-2.4.4) and then fully reverted (2.4.5) -- material/
          print-time reduction is handled in the slicer instead, so the
          default plate is a solid slab again, unchanged from 2.3.0/
-         pre-2.3.1. Everything else is six rounds of independent code
-         review (2.4.6-2.4.13): build_plate() went from no input
-         validation to a derived-geometry check covering every
+         pre-2.3.1. Everything else is the independent code-review
+         rounds of 2.4.6-2.4.12 plus the 2.4.13 groove-depth fix:
+         build_plate() went from no input validation to a
+         derived-geometry check covering every
          mechanical feature and the debossed branding, with a real
          0.8mm minimum wall and full X/Y/Z rib-groove fit play; several
          drawing and STL-header bugs were fixed; the test suite grew
-         from 0 to 86 tests, each one verified (by mutation testing) to
-         actually catch what it claims to.
+         from 0 to 86 tests, many of them mutation-tested as each entry
+         above notes (not all: see 3.0.3 and 3.0.6).
   3.0.1  process/docs only, no geometry change: every merged branch bumps
          the iterative version and gets a CHANGELOG.md entry (previously
          model changes only / releases only); git-flow branches+PRs and
@@ -672,6 +673,16 @@ Changelog
          with dimensioned alt text. Verified: STL triangle data (bytes
          80+) byte-identical to 3.0.10; both meshes watertight; full
          test suite passes; drawings viewed.
+  3.0.12 docs only (#22): the 3.0.0 notes (here and in CHANGELOG.md) no
+         longer claim every test was mutation-tested -- many were, and
+         3.0.3/3.0.6 closed the gaps later review found; the review
+         rounds are 2.4.6-2.4.12 (2.4.13 was a follow-up fix, and the
+         first 32 tests predate them, at 2.4.4); the 2.4.12 entry's
+         "exactly the 5 tests" now notes the same mutation fails 4 at
+         3.0.0. Verified by rerunning that mutation at both commits
+         (5 failed at 2.4.12, 4 at 3.0.0); STL triangle data (bytes
+         80+) byte-identical to 3.0.11; both meshes watertight; full
+         test suite passes.
   3.0.13 docs only (#23): CHANGELOG.md's 3.0.0 section now lists the
          changes that can break a 2.4.0 caller -- PlateGeometry's
          honeycomb_* fields removed, mag_xs/bottom_mag_ys now tuples,
