@@ -290,7 +290,8 @@ class TestParameterValidation:
         (dict(stack_inset_y=0.5), "front/back edge"),
         # derived-geometry collisions (two features come within
         # _MIN_WALL of each other, or actually overlap)
-        (dict(plate_x=50.0), "comes within"),
+        # the default mag_inset_x (30.75) is past half of a 50 mm plate
+        (dict(plate_x=50.0), "less than half"),
         (dict(mag_count_x=40), "comes within"),
         (dict(mag_inset_x=12.0), "comes within"),
         (dict(bottom_mag_inset_x=5.0), "comes within"),
