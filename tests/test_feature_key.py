@@ -31,11 +31,11 @@ def _capture(fn, tmp_path):
 
 EXPECTED = {
     "top": ["dashed rectangle: stacking groove (hidden, bottom face)",
-            "dashed circle: mounting magnet bore (hidden, bottom face)",
-            "dashed rectangle at the edge: magnet bore (hidden, front and back faces)",
+            "dotted circle: mounting magnet bore (hidden, bottom face)",
+            "dotted rectangle at the edge: magnet bore (hidden, front and back faces)",
             "solid filled rectangle: stacking rib (top face)"],
     "front": ["solid circle: magnet bore (front face)",
-              "dashed rectangle: mounting magnet bore (hidden, bottom face)",
+              "dotted rectangle: mounting magnet bore (hidden, bottom face)",
               "dashed rectangle: stacking groove (hidden, bottom face)",
               "solid filled rectangle: stacking rib (top face)"],
 }
@@ -59,5 +59,39 @@ def test_key_swatches_use_the_feature_line_style(tmp_path, name, fn):
     key_patches = [p for p in ax.patches if not p.get_clip_on()]
     assert len(key_patches) == 4
     for patch, label in zip(key_patches, EXPECTED[name]):
-        dashed = patch.get_linestyle() not in ("-", "solid")
-        assert dashed == label.startswith("dashed"), label
+        patterned = patch.get_linestyle() not in ("-", "solid")
+        assert patterned == label.startswith(("dashed", "dotted")), label
+
+
+def _key_and_drawn(ax):
+    key = [p for p in ax.patches if not p.get_clip_on()]
+    drawn = [p for p in ax.patches if p.get_clip_on()]
+    return key, drawn
+
+
+def _style(p):
+    return (type(p).__name__, p.get_linestyle())
+
+
+@pytest.mark.parametrize("fn", ["_tech_top_plan", "_tech_front_elevation"])
+def test_no_two_key_entries_share_shape_and_line_style(tmp_path, fn):
+    """Features must differ by shape or line pattern, not color alone."""
+    key, _ = _key_and_drawn(_capture(getattr(cli, fn), tmp_path))
+    styles = [_style(p) for p in key]
+    assert len(set(styles)) == len(styles), styles
+
+
+@pytest.mark.parametrize("fn", ["_tech_top_plan", "_tech_front_elevation"])
+def test_drawn_hidden_features_use_the_keys_line_style(tmp_path, fn):
+    """Every patterned (hidden) patch on the sheet has the shape, line
+    pattern and color of exactly one key entry, and every patterned key
+    entry is drawn on the sheet."""
+    key, drawn = _key_and_drawn(_capture(getattr(cli, fn), tmp_path))
+    key_by_style = {_style(p): p.get_edgecolor() for p in key
+                    if p.get_linestyle() not in ("-", "solid")}
+    hidden = [p for p in drawn if p.get_linestyle() not in ("-", "solid")]
+    assert hidden
+    for p in hidden:
+        assert _style(p) in key_by_style, _style(p)
+        assert tuple(p.get_edgecolor()) == tuple(key_by_style[_style(p)])
+    assert {_style(p) for p in hidden} == set(key_by_style)

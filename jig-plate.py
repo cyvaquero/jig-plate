@@ -723,7 +723,8 @@ Changelog
   3.0.19 drawing feature keys (#51): the top plan and front elevation each
          carry a key naming the stacking groove, the mounting and edge
          magnet bores and the rib, with each swatch in the line style the
-         feature is drawn in (add_key gained a points-based mode). Verified:
+         feature is drawn in (add_key gained a points-based mode); hidden
+         magnet bores are dotted and hidden grooves dashed on both sheets. Verified:
          STL triangle data (bytes 80+) byte-identical to 3.0.11; both
          meshes watertight; new tests fail without the key or with a
          wrong swatch style; drawings viewed; full test suite passes.
@@ -1077,6 +1078,11 @@ HATCH_LW = 0.3
 CUT_LW = 1.2
 HIDDEN_LW = 0.5
 HIDDEN_LS = (0, (4, 2))
+# hidden magnet bores are dotted, hidden grooves dashed, so the two differ
+# by line pattern and not only by color (WCAG 1.4.1); a little heavier so
+# the dots read at 3:1 and at README width
+HIDDEN_BORE_LS = (0, (1, 1.5))
+HIDDEN_BORE_LW = 0.9
 # dimension text interrupts whatever it crosses, as on a real drawing
 _DIM_LABEL_BBOX = dict(facecolor=BG, edgecolor="none", pad=0.15)
 
@@ -1210,14 +1216,14 @@ KEY_GROOVE = ("dashed rectangle: stacking groove (hidden, bottom face)",
 KEY_RIB = ("solid filled rectangle: stacking rib (top face)",
            FG, dict(fc=_faint(AMBER, 0.6), lw=0.6))
 KEY_BOTTOM_BORE_CIRCLE = (
-    "dashed circle: mounting magnet bore (hidden, bottom face)",
-    VIOLET, dict(shape="circle", ls=HIDDEN_LS))
+    "dotted circle: mounting magnet bore (hidden, bottom face)",
+    VIOLET, dict(shape="circle", ls=HIDDEN_BORE_LS, lw=HIDDEN_BORE_LW))
 KEY_BOTTOM_BORE_RECT = (
-    "dashed rectangle: mounting magnet bore (hidden, bottom face)",
-    VIOLET, dict(ls=HIDDEN_LS))
+    "dotted rectangle: mounting magnet bore (hidden, bottom face)",
+    VIOLET, dict(ls=HIDDEN_BORE_LS, lw=HIDDEN_BORE_LW))
 KEY_EDGE_BORE = (
-    "dashed rectangle at the edge: magnet bore (hidden, front and back faces)",
-    VIOLET, dict(ls=HIDDEN_LS))
+    "dotted rectangle at the edge: magnet bore (hidden, front and back faces)",
+    VIOLET, dict(ls=HIDDEN_BORE_LS, lw=HIDDEN_BORE_LW))
 KEY_FRONT_BORE = (
     "solid circle: magnet bore (front face)",
     VIOLET, dict(shape="circle", fc=_faint(VIOLET, 0.15), lw=0.8))
@@ -1245,29 +1251,29 @@ def _tech_top_plan(out_path, geom):
     # rectangle starting at the face and receding into the material,
     # not a circle centered on the edge (half of which would render
     # outside the part). Hidden from this top-down view past the
-    # entrance, so dashed like the bottom-face bores below.
+    # entrance, so dotted like the bottom-face bores below.
     for mx in geom.mag_xs:
         for y_face, into_sign in ((0.0, 1.0), (geom.plate_y, -1.0)):
             y0 = y_face if into_sign > 0 else y_face - geom.mag_depth
             ax.add_patch(plt.Rectangle(
                 (mx * S - geom.mag_d * S / 2, y0 * S),
                 geom.mag_d * S, geom.mag_depth * S,
-                fc="none", ec=VIOLET, lw=HIDDEN_LW, ls=HIDDEN_LS, zorder=5))
+                fc="none", ec=VIOLET, lw=HIDDEN_BORE_LW, ls=HIDDEN_BORE_LS, zorder=5))
             ax.plot(mx * S, y_face * S, "+", color=VIOLET, ms=3, mew=0.6,
                     zorder=5)
 
     # bottom-face mounting magnets: also hidden (blind, drilled straight
-    # up from the underside), drawn dashed for the same reason
+    # up from the underside), drawn dotted for the same reason
     for mx in (geom.bottom_mag_inset_x, geom.plate_x - geom.bottom_mag_inset_x):
         for my in geom.bottom_mag_ys:
             ax.add_patch(plt.Circle((mx * S, my * S), geom.mag_d * S / 2,
-                         fc="none", ec=VIOLET, lw=HIDDEN_LW, ls=HIDDEN_LS,
+                         fc="none", ec=VIOLET, lw=HIDDEN_BORE_LW, ls=HIDDEN_BORE_LS,
                          zorder=5))
             ax.plot(mx * S, my * S, "+", color=VIOLET, ms=3, mew=0.6,
                     zorder=5)
 
     # corner stacking ribs (top face, visible) / grooves (bottom face,
-    # hidden -- dashed, same convention as the bottom-corner bores above)
+    # hidden -- dashed, unlike the dotted bores above)
     for mx in geom.stack_xs:
         for my in geom.stack_ys:
             groove_len = geom.stack_len + geom.stack_play
@@ -1371,7 +1377,7 @@ def _tech_front_elevation(out_path, geom):
         ax.add_patch(plt.Rectangle(
             ((bore_cx - geom.mag_d / 2) * S, 0),
             geom.mag_d * S, geom.mag_depth * S,
-            fc="none", ec=VIOLET, lw=HIDDEN_LW, ls=HIDDEN_LS, zorder=5))
+            fc="none", ec=VIOLET, lw=HIDDEN_BORE_LW, ls=HIDDEN_BORE_LS, zorder=5))
     for groove_cx in geom.stack_xs:
         groove_len = geom.stack_len + geom.stack_play
         ax.add_patch(plt.Rectangle(
