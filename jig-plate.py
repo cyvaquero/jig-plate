@@ -724,8 +724,9 @@ Changelog
          only with side_branding; non-finite or overflowing numbers
          (10**400) raise ValueError naming the parameter; mag_inset_x and
          stack_inset_x >= plate_x / 2 are rejected; drawings: every label
-         >= 7 pt, narrower front elevation, outside arrows on the 4 mm
-         rib-inset dimension, outlined key swatches, opaque violet
+         >= 7 pt, narrower front elevation (its 4.5 dimension moved
+         outside the plate), outside arrows on the 4 mm rib-inset
+         dimension, outlined key swatches, opaque violet
          extension lines; README images link to their files and the
          Dimensions table has headers; the CLI prints one labeled line per
          mesh. Verified: STL triangle data (bytes 80+) byte-identical to
@@ -1080,10 +1081,7 @@ def _dim_h(ax, y, x0, x1, label, offset=0, fontsize=MIN_LABEL_PT, side="above",
             bbox=_DIM_LABEL_BBOX)
 
 
-def _dim_v(ax, x, y0, y1, label, offset=0, fontsize=MIN_LABEL_PT, side="right",
-           backdrop=True):
-    # backdrop=False where the label sits on the part itself and a BG box
-    # would erase the outline it is next to
+def _dim_v(ax, x, y0, y1, label, offset=0, fontsize=MIN_LABEL_PT, side="right"):
     ox = x + offset
     gap = 1.2 if side == "right" else -1.2
     ax.annotate("", xy=(ox, y0), xytext=(ox, y1),
@@ -1094,7 +1092,7 @@ def _dim_v(ax, x, y0, y1, label, offset=0, fontsize=MIN_LABEL_PT, side="right",
     ax.text(ox + gap, (y0 + y1) / 2, label, fontsize=fontsize,
             ha="left" if side == "right" else "right",
             va="center", color=DIM_COLOR, fontfamily="sans-serif",
-            rotation=90, zorder=7, bbox=_DIM_LABEL_BBOX if backdrop else None)
+            rotation=90, zorder=7, bbox=_DIM_LABEL_BBOX)
 
 
 def _fit_view(*axes, pad=0.05):
@@ -1328,10 +1326,12 @@ def _tech_front_elevation(out_path, geom):
     _dim_v(ax, geom.plate_x * S, 0, geom.plate_z * S,
            f"{geom.plate_z:.0f}", offset=8 * S)
 
-    # magnet bore center height (left of first bore)
+    # magnet bore center height, outside the plate (6 mm left of its end)
+    # with an extension line from the first bore's center, so the label
+    # touches no outline
     _dim_v(ax, geom.mag_xs[0] * S, 0, (geom.plate_z / 2) * S,
-           f"{geom.plate_z / 2:.1f}", offset=-6 * S, side="left",
-           backdrop=False)
+           f"{geom.plate_z / 2:.1f}", offset=-(geom.mag_xs[0] + 6) * S,
+           side="left")
 
     _title_block(ax, "Front Elevation")
 

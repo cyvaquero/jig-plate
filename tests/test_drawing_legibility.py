@@ -117,3 +117,16 @@ def test_readme_images_link_to_their_full_size_file():
 def test_readme_tables_have_real_headers():
     readme = (_ROOT / "README.md").read_text()
     assert "| | |" not in readme
+
+
+def test_bore_height_label_clears_the_plate_outline(figs):
+    """The 4.5 label sits outside the plate (left of x = 0), so it touches
+    no outline; at 7 pt it did not fit between the bottom edge and the
+    bore line inside the plate."""
+    fig = figs["front"]
+    ax = fig.axes[0]
+    fig.canvas.draw()
+    label = next(t for t in ax.texts if t.get_text() == "4.5")
+    box = label.get_window_extent(fig.canvas.get_renderer())
+    plate_x0 = ax.transData.transform((0, 0))[0]
+    assert box.x1 < plate_x0

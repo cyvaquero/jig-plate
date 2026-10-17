@@ -45,7 +45,9 @@ unchanged from 3.0.11 (triangle data byte-identical).
   (it used to print `stack coupon: True 8.09 cm3 [...]`) (#54).
 - All four drawings use at least 7 pt for every label, the front elevation
   is a narrower figure so its labels read larger at README width, the 4 mm
-  rib-inset dimension no longer collapses into a bowtie, the key swatches
+  rib-inset dimension no longer collapses into a bowtie, the front
+  elevation's 4.5 bore-height dimension sits outside the plate so its label
+  touches no outline, the key swatches
   have an outline, and the violet extension lines on the top plan are no
   longer faded (#54).
 - Each README image links to its full-size file, and the Dimensions table
