@@ -720,6 +720,13 @@ Changelog
          so the mesh stays a volume) fails only that face's test(s);
          STL triangle data (bytes 80+) byte-identical to 3.0.11; both
          meshes watertight; full test suite passes.
+  3.0.20 label length precheck (#52): build_plate measures the label with
+         a linear text-width call before rendering glyphs and rejects one
+         wider than plate_x at once (label "W"*6000: 5.5 s -> 0.14 s);
+         the exact checks stay. Verified: STL triangle data (bytes 80+)
+         byte-identical to 3.0.11; both meshes watertight; the longest
+         buildable "W" run (44) still builds; new tests fail under
+         mutation; full test suite passes.
 """
 import argparse
 import sys
@@ -750,7 +757,7 @@ def _solid(color, alpha):
     fg, bg = _to_rgba(color), _to_rgba(BG)
     return tuple(alpha * c + (1 - alpha) * b for c, b in zip(fg[:3], bg[:3])) + (1.0,)
 
-VERSION = "3.0.17"
+VERSION = "3.0.20"
 OUT_DIR = Path(__file__).resolve().parent / "output"
 IMG_DIR = Path(__file__).resolve().parent / "images"
 

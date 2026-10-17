@@ -121,6 +121,15 @@ def _unsupported_label_chars(text):
     return [ch for ch in dict.fromkeys(text) if seen[ch]]
 
 
+def _text_width(text, size):
+    """Width in mm of `text` set `size` mm tall in the label font: a linear
+    measurement that renders no outlines, so it is cheap for any length."""
+    from matplotlib.textpath import text_to_path as _t2p
+    fp = _label_font_properties()
+    w, _h, _d = _t2p.get_text_width_height_descent(text, fp, ismath=False)
+    return w * size / fp.get_size_in_points()
+
+
 def _text_polys(text, size, x0, y0):
     """Shapely polygons for extrudable text at (x0, y0) baseline."""
     from matplotlib.textpath import text_to_path as _t2p
@@ -374,6 +383,21 @@ def build_plate(
     # upper limit) can cut the top-face branding all the way through the
     # plate; neither was checked before) ----
     _front_cy = front_margin / 2
+
+    # Cheap length check before any glyph is rendered and nested (that is
+    # quadratic in the glyph count, so a very long label stalled for
+    # seconds before the width check below rejected it). It rejects only a
+    # label wider than plate_x itself, while branding needs the text plus
+    # 9 mm of logo and gap to fit, so it can never reject a label that
+    # builds; the exact check below stays.
+    _est_w = _text_width(label, 4.0)
+    _shown = label if len(label) <= 40 else label[:40] + "..."
+    if _est_w > plate_x:
+        raise ValueError(
+            f"branding (logo + label {_shown!r}) is far wider than "
+            f"plate_x ({plate_x}): the label alone is {_est_w:.0f} mm "
+            "wide -- shorten the label or enlarge the plate"
+        )
 
     _tp0 = _text_polys(label, 4.0, 0, 0)
     if not _tp0:
