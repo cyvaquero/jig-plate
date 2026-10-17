@@ -125,8 +125,10 @@ def test_bore_height_label_clears_the_plate_outline(figs):
     bore line inside the plate."""
     fig = figs["front"]
     ax = fig.axes[0]
-    fig.canvas.draw()
+    from matplotlib.backends.backend_agg import FigureCanvasAgg
+    canvas = FigureCanvasAgg(fig)  # the figure was closed after saving
+    canvas.draw()
     label = next(t for t in ax.texts if t.get_text() == "4.5")
-    box = label.get_window_extent(fig.canvas.get_renderer())
+    box = label.get_window_extent(canvas.get_renderer())
     plate_x0 = ax.transData.transform((0, 0))[0]
     assert box.x1 < plate_x0
