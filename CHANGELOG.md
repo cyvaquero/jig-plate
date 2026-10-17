@@ -42,8 +42,9 @@ unchanged from 3.0.11 (triangle data byte-identical).
 ### Fixed
 - The top plan and the front elevation each have a key under the drawing
   that names the stacking groove, the mounting-magnet bore, the edge
-  magnet bores and the stacking rib. Each swatch is drawn in the same line
-  style as the feature (dashed or solid), so the hidden features can be
+  magnet bores and the stacking rib. Hidden magnet bores are now dotted
+  and hidden grooves dashed on both sheets, and each key swatch is drawn
+  in the same line style and shape as its feature, so the features can be
   told apart without relying on color. The README descriptions of both
   images say which hidden feature is which (#51).
 
