@@ -33,3 +33,26 @@ def test_cheap_check_is_looser_than_the_exact_one():
     """The precheck only fires above plate_x; every label that builds is
     far below it (the branding needs 9 mm more than the text)."""
     assert _text_width("W" * LONGEST_W, 4.0) < 246.0 - 9.0
+
+
+# characters with an advance but no outline: the exact check ignores them
+# at the ends of a label, so the precheck must too
+NO_INK = [" ", " ", " ", " ", "⠀", "​"]
+
+
+@pytest.mark.parametrize("pad", NO_INK, ids=lambda c: f"U+{ord(c):04X}")
+def test_padded_labels_that_build_still_build(pad):
+    for label in ("Jig Plate" + pad * 300, pad * 300 + "Jig Plate"):
+        assert build_plate(label=label).solid.is_watertight
+
+
+def test_padded_wide_label_is_still_rejected_fast():
+    t0 = time.perf_counter()
+    with pytest.raises(ValueError, match="far wider than plate_x"):
+        build_plate(label=" " * 300 + "W" * 6000 + " " * 300)
+    assert time.perf_counter() - t0 < 2.0
+
+
+def test_all_whitespace_label_keeps_its_own_error():
+    with pytest.raises(ValueError):
+        build_plate(label=" " * 6000)

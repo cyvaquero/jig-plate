@@ -722,8 +722,9 @@ Changelog
          meshes watertight; full test suite passes.
   3.0.20 label length precheck (#52): build_plate measures the label with
          a linear text-width call before rendering glyphs and rejects one
-         wider than plate_x at once (label "W"*6000: 5.5 s -> 0.14 s);
-         the exact checks stay. Verified: STL triangle data (bytes 80+)
+         whose inked span (leading/trailing no-outline characters such as
+         spaces ignored) is wider than plate_x at once (label "W"*6000:
+         5.5 s -> 0.14 s); the exact checks stay. Verified: STL triangle data (bytes 80+)
          byte-identical to 3.0.11; both meshes watertight; the longest
          buildable "W" run (44) still builds; new tests fail under
          mutation; full test suite passes.
