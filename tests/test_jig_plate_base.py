@@ -292,6 +292,9 @@ class TestParameterValidation:
         # _MIN_WALL of each other, or actually overlap)
         # the default mag_inset_x (30.75) is past half of a 50 mm plate
         (dict(plate_x=50.0), "less than half"),
+        # insets below half the plate, but the plate is too small for the
+        # four bores between them (the collision path for plate size)
+        (dict(plate_x=70.0), "comes within"),
         (dict(mag_count_x=40), "comes within"),
         (dict(mag_inset_x=12.0), "comes within"),
         (dict(bottom_mag_inset_x=5.0), "comes within"),
