@@ -103,6 +103,24 @@ class TestMain:
         ):
             assert (img_dir / name).exists()
 
+    def test_console_prints_one_labeled_line_per_mesh(
+        self, _redirected_dirs, monkeypatch, capsys
+    ):
+        monkeypatch.setattr(sys, "argv", ["jig-plate.py"])
+
+        jig_plate_cli.main()
+
+        lines = capsys.readouterr().out.splitlines()
+        plate = [ln for ln in lines if ln.startswith("plate ")]
+        coupon = [ln for ln in lines if ln.startswith("stack coupon ")]
+        assert len(plate) == 1 and len(coupon) == 1
+        pattern = (r"^{} +\| watertight: True \| volume cm3: [\d.]+ "
+                   r"\| bbox: \[[\d. ]+\] \| faces: \d+$")
+        assert re.match(pattern.format("plate"), plate[0]), plate[0]
+        assert re.match(pattern.format("stack coupon"), coupon[0]), coupon[0]
+        # both prefixes padded to the same width so the columns line up
+        assert plate[0].index("|") == coupon[0].index("|")
+
     def test_custom_label_is_stamped_and_still_watertight(
         self, _redirected_dirs, monkeypatch
     ):

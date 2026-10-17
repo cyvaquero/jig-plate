@@ -720,6 +720,17 @@ Changelog
          so the mesh stays a volume) fails only that face's test(s);
          STL triangle data (bytes 80+) byte-identical to 3.0.11; both
          meshes watertight; full test suite passes.
+  3.0.21 low review notes of #54: the label is checked against plate_y
+         only with side_branding; non-finite or overflowing numbers
+         (10**400) raise ValueError naming the parameter; mag_inset_x and
+         stack_inset_x >= plate_x / 2 are rejected; drawings: every label
+         >= 7 pt, narrower front elevation, outside arrows on the 4 mm
+         rib-inset dimension, outlined key swatches, opaque violet
+         extension lines; README images link to their files and the
+         Dimensions table has headers; the CLI prints one labeled line per
+         mesh. Verified: STL triangle data (bytes 80+) byte-identical to
+         3.0.11; both meshes watertight; drawings viewed; every new test
+         fails on 3.0.17 and passes now; full test suite passes.
 """
 import argparse
 import sys
@@ -750,7 +761,7 @@ def _solid(color, alpha):
     fg, bg = _to_rgba(color), _to_rgba(BG)
     return tuple(alpha * c + (1 - alpha) * b for c, b in zip(fg[:3], bg[:3])) + (1.0,)
 
-VERSION = "3.0.17"
+VERSION = "3.0.21"
 OUT_DIR = Path(__file__).resolve().parent / "output"
 IMG_DIR = Path(__file__).resolve().parent / "images"
 
@@ -783,6 +794,10 @@ SHAPE = "#888780"
 FG = "#1a1915"
 MUTED = "#6b6860"
 BG = "#faf9f7"
+
+# smallest label or annotation size on any drawing, in points (about 6 px
+# tall at the README's display width is too small to read; 7 pt is the floor)
+MIN_LABEL_PT = 7
 
 C30, S30 = np.cos(np.radians(30)), np.sin(np.radians(30))
 
@@ -823,9 +838,11 @@ def add_key(ax, items, y_pos):
     total_w = sum(len(label) * 5.5 + 22 for label, _ in items)
     x = -total_w / 2
     for label, color in items:
+        # alpha baked into the fill only; the MUTED outline stays opaque so
+        # the swatch edge reaches 3:1 against BG
         ax.add_patch(FancyBboxPatch((x, y_pos - 5), 11, 11,
-                     boxstyle="round,pad=1", fc=color, ec="none",
-                     alpha=0.7, zorder=5))
+                     boxstyle="round,pad=1", fc=_faint(color, 0.7),
+                     ec=MUTED, lw=0.6, zorder=5))
         ax.text(x + 16, y_pos + 0.5, label, fontsize=7.5,
                 color=MUTED, va="center", fontfamily="sans-serif", zorder=5)
         x += len(label) * 5.5 + 30
@@ -1027,7 +1044,7 @@ HIDDEN_LS = (0, (4, 2))
 _DIM_LABEL_BBOX = dict(facecolor=BG, edgecolor="none", pad=0.15)
 
 
-def _dim_h(ax, y, x0, x1, label, offset=0, fontsize=7, side="above",
+def _dim_h(ax, y, x0, x1, label, offset=0, fontsize=MIN_LABEL_PT, side="above",
            outside=False):
     # outside=True for spans narrower than a pair of arrowheads, which would
     # otherwise meet in the middle and read as a bowtie: the arrowheads sit
@@ -1063,7 +1080,10 @@ def _dim_h(ax, y, x0, x1, label, offset=0, fontsize=7, side="above",
             bbox=_DIM_LABEL_BBOX)
 
 
-def _dim_v(ax, x, y0, y1, label, offset=0, fontsize=7, side="right"):
+def _dim_v(ax, x, y0, y1, label, offset=0, fontsize=MIN_LABEL_PT, side="right",
+           backdrop=True):
+    # backdrop=False where the label sits on the part itself and a BG box
+    # would erase the outline it is next to
     ox = x + offset
     gap = 1.2 if side == "right" else -1.2
     ax.annotate("", xy=(ox, y0), xytext=(ox, y1),
@@ -1074,7 +1094,7 @@ def _dim_v(ax, x, y0, y1, label, offset=0, fontsize=7, side="right"):
     ax.text(ox + gap, (y0 + y1) / 2, label, fontsize=fontsize,
             ha="left" if side == "right" else "right",
             va="center", color=DIM_COLOR, fontfamily="sans-serif",
-            rotation=90, zorder=7, bbox=_DIM_LABEL_BBOX)
+            rotation=90, zorder=7, bbox=_DIM_LABEL_BBOX if backdrop else None)
 
 
 def _fit_view(*axes, pad=0.05):
@@ -1210,7 +1230,7 @@ def _tech_top_plan(out_path, geom):
         (bx0 * S, by0 * S), (bx1 - bx0) * S, (by1 - by0) * S,
         fc=_faint(SHAPE, 0.25), ec=MUTED, lw=0.6, zorder=4))
     ax.text((bx0 + bx1) / 2 * S, (by0 + by1) / 2 * S,
-            "branding", fontsize=6,
+            "branding", fontsize=MIN_LABEL_PT,
             ha="center", va="center", color=FG, fontfamily="sans-serif",
             zorder=6)
 
@@ -1230,18 +1250,18 @@ def _tech_top_plan(out_path, geom):
                 arrowprops=dict(arrowstyle="<->", color=VIOLET, lw=DIM_LW,
                                 shrinkA=0, shrinkB=0))
     ax.plot([geom.mag_xs[0] * S, geom.mag_xs[0] * S], [0, -6 * S],
-            color=VIOLET, lw=EXT_LW, alpha=0.5)
+            color=VIOLET, lw=EXT_LW)
     ax.plot([geom.mag_xs[1] * S, geom.mag_xs[1] * S], [0, -6 * S],
-            color=VIOLET, lw=EXT_LW, alpha=0.5)
+            color=VIOLET, lw=EXT_LW)
     ax.text((geom.mag_xs[0] + geom.mag_xs[1]) / 2 * S, -7.5 * S,
             f"{geom.mag_xs[1] - geom.mag_xs[0]:.1f} typ.",
-            fontsize=6.5, ha="center", va="top", color=VIOLET,
+            fontsize=MIN_LABEL_PT, ha="center", va="top", color=VIOLET,
             fontfamily="sans-serif")
 
     # stacking rib inset from the left edge
     _dim_h(ax, geom.stack_ys[0] * S - geom.stack_w * S, 0, geom.stack_xs[0] * S,
            f"{geom.stack_inset_x:.0f}", offset=-8 * S, side="below",
-           fontsize=6.5)
+           fontsize=MIN_LABEL_PT, outside=True)
 
     _title_block(ax, "Top Plan View")
 
@@ -1256,7 +1276,7 @@ def _tech_top_plan(out_path, geom):
 # ---- technical drawing 2: front elevation (Y=0 face) ----
 def _tech_front_elevation(out_path, geom):
     S = 10.0
-    fig, ax = plt.subplots(figsize=(16, 3.5), dpi=200)
+    fig, ax = plt.subplots(figsize=(12, 2.6), dpi=200)
     ax.set_aspect("equal")
     ax.axis("off")
     fig.patch.set_facecolor(BG)
@@ -1310,7 +1330,8 @@ def _tech_front_elevation(out_path, geom):
 
     # magnet bore center height (left of first bore)
     _dim_v(ax, geom.mag_xs[0] * S, 0, (geom.plate_z / 2) * S,
-           f"{geom.plate_z / 2:.1f}", offset=-6 * S, side="left", fontsize=6)
+           f"{geom.plate_z / 2:.1f}", offset=-6 * S, side="left",
+           backdrop=False)
 
     _title_block(ax, "Front Elevation")
 
@@ -1387,7 +1408,7 @@ def _tech_detail(out_path, geom, magnet_d=MAGNET_D, magnet_len=MAGNET_LEN):
                   ls="--", zorder=4))
     ax1.text(magnet_len / 2 * S1, mag_cz * S1,
              f"magnet\n{magnet_d:g}×{magnet_len:g}",
-             fontsize=6.5, ha="center", va="center", color=VIOLET,
+             fontsize=MIN_LABEL_PT, ha="center", va="center", color=VIOLET,
              fontfamily="sans-serif", fontstyle="italic", zorder=5)
 
     ax1.plot([leader_y0 * S1, plate_y1_m * S1],
@@ -1400,7 +1421,7 @@ def _tech_detail(out_path, geom, magnet_d=MAGNET_D, magnet_len=MAGNET_LEN):
     _dim_h(ax1, (mag_cz + bore_r) * S1, 0, geom.mag_depth * S1,
            f"{geom.mag_depth:.1f} deep", offset=3 * S1, fontsize=7)
     _dim_v(ax1, plate_y1_m * S1, 0, mag_cz * S1,
-           f"{mag_cz:.1f}", offset=4 * S1, fontsize=6.5)
+           f"{mag_cz:.1f}", offset=4 * S1, fontsize=MIN_LABEL_PT)
     _dim_v(ax1, plate_y1_m * S1, 0, geom.plate_z * S1,
            f"{geom.plate_z:.0f}", offset=9 * S1, fontsize=7)
     clearance = geom.mag_depth - magnet_len
@@ -1408,7 +1429,7 @@ def _tech_detail(out_path, geom, magnet_d=MAGNET_D, magnet_len=MAGNET_LEN):
         # arrowheads outside: the span is narrower than a pair of them
         _dim_h(ax1, (mag_cz - bore_r) * S1, magnet_len * S1, geom.mag_depth * S1,
                f"{clearance:.1f}", offset=-3 * S1, side="below",
-               fontsize=5.5, outside=True)
+               fontsize=MIN_LABEL_PT, outside=True)
 
     ax1.text(0.5, -0.02,
              "Magnet Bore Detail",
@@ -1478,11 +1499,11 @@ def _tech_detail(out_path, geom, magnet_d=MAGNET_D, magnet_len=MAGNET_LEN):
                   fc=BG, ec=FG, lw=CUT_LW, zorder=4))
 
     ax2.text(geom.stack_xs[0] * S2, (geom.plate_z + geom.stack_h + 0.8) * S2,
-             "rib (top face)", fontsize=6.5, ha="center", va="bottom",
+             "rib (top face)", fontsize=MIN_LABEL_PT, ha="center", va="bottom",
              color=AMBER, fontfamily="sans-serif", fontstyle="italic",
              zorder=5)
     ax2.text(geom.stack_xs[0] * S2, (groove_depth / 2) * S2,
-             "groove\n(bottom face)", fontsize=6, ha="center", va="center",
+             "groove\n(bottom face)", fontsize=MIN_LABEL_PT, ha="center", va="center",
              color=MUTED, fontfamily="sans-serif", fontstyle="italic",
              zorder=5)
 
@@ -1490,10 +1511,10 @@ def _tech_detail(out_path, geom, magnet_d=MAGNET_D, magnet_len=MAGNET_LEN):
            f"{geom.stack_h:.1f}", offset=4 * S2, fontsize=7)
     _dim_h(ax2, geom.plate_z * S2, rib_x0 * S2, rib_x1 * S2,
            f"{geom.stack_len:.1f}", offset=-2.5 * S2, side="below",
-           fontsize=6.5)
+           fontsize=MIN_LABEL_PT)
     _dim_v(ax2, (rib_x0 - play) * S2, 0, groove_depth * S2,
            f"{groove_depth:.1f} deep", offset=-4 * S2, side="left",
-           fontsize=6.5)
+           fontsize=MIN_LABEL_PT)
 
     # groove-to-plate-edge clearance (0.9 mm at the defaults) -- computed
     # from the actual geometry, not a hardcoded figure, so it can't drift
@@ -1501,7 +1522,7 @@ def _tech_detail(out_path, geom, magnet_d=MAGNET_D, magnet_len=MAGNET_LEN):
     # comment repeating this number elsewhere could.
     groove_edge_clearance = (rib_x0 - play) - det_x0
     _dim_h(ax2, 0, det_x0 * S2, (rib_x0 - play) * S2,
-           f"{groove_edge_clearance:.1f}", offset=3 * S2, fontsize=6.5)
+           f"{groove_edge_clearance:.1f}", offset=3 * S2, fontsize=MIN_LABEL_PT)
 
     # bottom-corner mounting bore -- sectioned through its own center, so
     # the vertical cylinder shows as a mag_d (X) x mag_depth (Z) rectangle
@@ -1519,7 +1540,7 @@ def _tech_detail(out_path, geom, magnet_d=MAGNET_D, magnet_len=MAGNET_LEN):
     ax2.add_patch(MplPoly([(x * S2, z * S2) for x, z in bore_verts],
                   fc=BG, ec=FG, lw=CUT_LW, zorder=4))
     ax2.text(bore_x * S2, (geom.mag_depth / 2) * S2,
-             "magnet bore\n(bottom face)", fontsize=6, ha="center",
+             "magnet bore\n(bottom face)", fontsize=MIN_LABEL_PT, ha="center",
              va="center", color=MUTED, fontfamily="sans-serif",
              fontstyle="italic", zorder=5)
 
@@ -1529,7 +1550,7 @@ def _tech_detail(out_path, geom, magnet_d=MAGNET_D, magnet_len=MAGNET_LEN):
     wall = bore_x0 - (rib_x1 + play)
     _wall_dim_z = max(groove_depth, geom.mag_depth) + 1.5
     _dim_h(ax2, 0, (rib_x1 + play) * S2, bore_x0 * S2,
-           f"{wall:.2f}", offset=_wall_dim_z * S2, fontsize=6.5)
+           f"{wall:.2f}", offset=_wall_dim_z * S2, fontsize=MIN_LABEL_PT)
 
     ax2.text(0.5, -0.02,
              "Stacking Joint Detail",
@@ -1538,7 +1559,7 @@ def _tech_detail(out_path, geom, magnet_d=MAGNET_D, magnet_len=MAGNET_LEN):
     ax2.text(0.5, -0.10,
              "composite view: groove and bore shown at their own Y "
              "positions, not a single cross-section plane",
-             transform=ax2.transAxes, fontsize=5.5, ha="center", va="top",
+             transform=ax2.transAxes, fontsize=MIN_LABEL_PT, ha="center", va="top",
              color=MUTED, fontfamily="sans-serif", fontstyle="italic")
 
     _fit_view(ax1, ax2)
@@ -1547,6 +1568,18 @@ def _tech_detail(out_path, geom, magnet_d=MAGNET_D, magnet_len=MAGNET_LEN):
                 facecolor=BG)
     plt.close(fig)
     print("wrote", out_path)
+
+
+def _mesh_summary(name, mesh, volume_digits, bbox_digits):
+    """One labeled console line per mesh, the same shape for both:
+    `plate        | watertight: True | volume cm3: 481.5 | bbox: [...] | faces: N`
+    (the name padded to the longest, "stack coupon")."""
+    return (
+        f"{name:<12} | watertight: {mesh.is_watertight} | "
+        f"volume cm3: {round(mesh.volume / 1000, volume_digits)} | "
+        f"bbox: {np.round(mesh.bounds[1] - mesh.bounds[0], bbox_digits)} | "
+        f"faces: {len(mesh.faces)}"
+    )
 
 
 def main():
@@ -1569,16 +1602,7 @@ def main():
     solid = result.solid
     geom = result.geometry
 
-    print(
-        "watertight:",
-        solid.is_watertight,
-        "| volume cm3:",
-        round(solid.volume / 1000, 1),
-        "| bbox:",
-        np.round(solid.bounds[1] - solid.bounds[0], 3),
-        "| faces:",
-        len(solid.faces),
-    )
+    print(_mesh_summary("plate", solid, 1, 3))
 
     OUT_DIR.mkdir(exist_ok=True)
     OUT = OUT_DIR / f"jig_plate_{VERSION}.stl"
@@ -1622,13 +1646,7 @@ def main():
         name for name, mesh in (("plate", solid), ("stack coupon", stack_coupon))
         if not mesh.is_watertight
     ]
-    print(
-        "stack coupon:",
-        stack_coupon.is_watertight,
-        round(stack_coupon.volume / 1000, 2),
-        "cm3",
-        np.round(stack_coupon.bounds[1] - stack_coupon.bounds[0], 2),
-    )
+    print(_mesh_summary("stack coupon", stack_coupon, 2, 2))
 
     IMG_DIR.mkdir(exist_ok=True)
     _plate_diagram(IMG_DIR / f"jig_plate_{VERSION}_diagram.png", geom)

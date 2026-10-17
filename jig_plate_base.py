@@ -17,6 +17,7 @@ out pockets that avoid them. File I/O, diagrams, and the CLI stay in
 `jig-plate.py`.
 """
 import dataclasses
+import math
 
 import numpy as np
 import trimesh
@@ -305,8 +306,16 @@ def build_plate(
     ):
         if isinstance(_value, bool) or not isinstance(_value, (int, float)):
             raise ValueError(f"{_name} must be a number, got {_value!r}")
-        if not np.isfinite(_value):
-            raise ValueError(f"{_name} must be finite, got {_value!r}")
+        # math.isfinite, not np.isfinite: it accepts any int, and raises
+        # OverflowError for one too large for a float (10**400), which
+        # must be a ValueError naming the parameter like any other bad value
+        try:
+            _finite = math.isfinite(_value)
+        except OverflowError:
+            _finite = False
+        if not _finite:
+            raise ValueError(
+                f"{_name} must be finite, got {_value!r:.40}")
     if isinstance(mag_count_x, bool) or not isinstance(mag_count_x, int):
         raise ValueError(f"mag_count_x must be an int, got {mag_count_x!r}")
 
@@ -353,6 +362,16 @@ def build_plate(
             "couldn't stack -- and at 0 it is a press fit that won't seat "
             "on FDM prints"
         )
+    # the bores and ribs are laid out from each side toward the middle, so
+    # an inset at or past half the plate crosses them over (descending
+    # positions) or stacks them on one spot
+    for _name, _value in (("mag_inset_x", mag_inset_x),
+                          ("stack_inset_x", stack_inset_x)):
+        if _value >= plate_x / 2:
+            raise ValueError(
+                f"{_name} ({_value}) must be less than half of plate_x "
+                f"({plate_x / 2})"
+            )
     if plate_x > 246.0:
         raise ValueError(
             f"plate_x ({plate_x}) exceeds 246 mm (bed width + purge-area "
@@ -391,12 +410,14 @@ def build_plate(
     _sx_left = (plate_y - _total) / 2
 
     # Kept although the feature-box checks below also reject an
-    # over-wide branding: this message names the label and both limits.
-    if _total > plate_y or _total > plate_x:
+    # over-wide branding: this message names the label and the limits.
+    # plate_y bounds it only when the side faces carry it too.
+    if _total > plate_x or (side_branding and _total > plate_y):
+        _limits = (f"plate_x ({plate_x})" if not side_branding else
+                   f"plate_y ({plate_y}) or plate_x ({plate_x})")
         raise ValueError(
             f"branding (logo + label {label!r}) is {_total:.1f} mm wide, "
-            f"wider than plate_y ({plate_y}) or plate_x ({plate_x}) -- "
-            "shorten the label or enlarge the plate"
+            f"wider than {_limits} -- shorten the label or enlarge the plate"
         )
 
     # each face's actual logo+text polygons, computed once and reused
