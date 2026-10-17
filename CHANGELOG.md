@@ -41,10 +41,11 @@ unchanged from 3.0.11 (triangle data byte-identical).
 
 ### Fixed
 - `build_plate()` now measures the label's width before rendering its
-  glyphs and raises the same `ValueError` immediately for a label wider
-  than the plate. A 6,000-character label took about 5.5 s to be rejected;
-  it now takes about 0.14 s. Every label that built before still builds
-  (#52).
+  glyphs and raises the same `ValueError` immediately for a label whose
+  inked part is wider than the plate (spaces and other characters with no
+  outline at the start or end of the label don't count, as before). A
+  6,000-character label took about 5.5 s to be rejected; it now takes about
+  0.14 s. Every label that built before still builds (#52).
 
 ## 3.0.17 — Faster text-orientation tests
 

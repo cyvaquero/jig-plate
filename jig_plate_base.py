@@ -130,6 +130,24 @@ def _text_width(text, size):
     return w * size / fp.get_size_in_points()
 
 
+def _inked_span(text):
+    """`text` without its leading and trailing characters that render no
+    outline (spaces, no-break and other fixed-width spaces, U+2800, the
+    zero-width characters): they have an advance but no ink, and the
+    deboss footprint is measured from the ink. Whether a character has ink
+    is decided with _text_polys itself, once per distinct character, so
+    this can never keep less than the exact check measures."""
+    inked = {}
+    for ch in set(text):
+        inked[ch] = bool(_text_polys(ch, 4.0, 0, 0))
+    first = next((i for i, ch in enumerate(text) if inked[ch]), None)
+    if first is None:
+        return ""
+    last = max(i for i in range(len(text) - 1, first - 1, -1)
+               if inked[text[i]])
+    return text[first:last + 1]
+
+
 def _text_polys(text, size, x0, y0):
     """Shapely polygons for extrudable text at (x0, y0) baseline."""
     from matplotlib.textpath import text_to_path as _t2p
@@ -387,15 +405,17 @@ def build_plate(
     # Cheap length check before any glyph is rendered and nested (that is
     # quadratic in the glyph count, so a very long label stalled for
     # seconds before the width check below rejected it). It rejects only a
-    # label wider than plate_x itself, while branding needs the text plus
-    # 9 mm of logo and gap to fit, so it can never reject a label that
-    # builds; the exact check below stays.
-    _est_w = _text_width(label, 4.0)
+    # label whose inked part is wider than plate_x itself, while branding
+    # needs the text plus 9 mm of logo and gap to fit, so it can never
+    # reject a label that builds; the exact check below stays.
+    # measured over the inked span only: leading/trailing characters with
+    # no outline cost nothing in the exact check below
+    _est_w = _text_width(_inked_span(label), 4.0)
     _shown = label if len(label) <= 40 else label[:40] + "..."
     if _est_w > plate_x:
         raise ValueError(
             f"branding (logo + label {_shown!r}) is far wider than "
-            f"plate_x ({plate_x}): the label alone is {_est_w:.0f} mm "
+            f"plate_x ({plate_x}): the inked part of the label is {_est_w:.0f} mm "
             "wide -- shorten the label or enlarge the plate"
         )
 
