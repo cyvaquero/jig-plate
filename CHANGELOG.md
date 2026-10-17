@@ -34,6 +34,19 @@ never changes -- it isn't one of the three.
 
 ---
 
+## 3.0.19 — Feature keys on the top plan and front elevation
+
+Iterative (unreleased). Plate and coupon geometry at the defaults are
+unchanged from 3.0.11 (triangle data byte-identical).
+
+### Fixed
+- The top plan and the front elevation each have a key under the drawing
+  that names the stacking groove, the mounting-magnet bore, the edge
+  magnet bores and the stacking rib. Each swatch is drawn in the same line
+  style as the feature (dashed or solid), so the hidden features can be
+  told apart without relying on color. The README descriptions of both
+  images say which hidden feature is which (#51).
+
 ## 3.0.17 — Faster text-orientation tests
 
 Iterative (unreleased). Tests only; the plate and coupon geometry are

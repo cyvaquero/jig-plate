@@ -60,18 +60,22 @@ drawn three times its true scale.](docs/images/diagram.png)
 
 ### Top plan
 
-![Top plan of the 246 × 218 mm plate: a stacking rib at each corner, a
-mounting-magnet bore on the underside near each corner, four magnet bores
-along each of the front and back edges at 61.5 mm spacing, and the
-branding area centered on the front edge. Features below the top face are
-dashed.](docs/images/tech_top.png)
+![Top plan of the 246 × 218 mm plate: a stacking rib (solid, filled) at each
+corner, with its stacking groove (dashed black rectangle, hidden, bottom face)
+behind it; a mounting-magnet bore (dashed violet circle, hidden, bottom face)
+near each corner; four magnet bores (dashed violet rectangles at the edge,
+hidden, front and back faces) along each of the front and back edges at
+61.5 mm spacing; and the branding area centered on the front edge. A key
+below the plan names each of these line styles.](docs/images/tech_top.png)
 
 ### Front elevation
 
 ![Front elevation of the plate, 246 mm long and 9 mm thick: four magnet
-bores centered 4.5 mm above the bottom, a stacking rib on each top corner,
-and the bottom grooves and mounting bores dashed as hidden
-features.](docs/images/tech_front.png)
+bores (solid circles) centered 4.5 mm above the bottom, a stacking rib (solid,
+filled) on each top corner, and two hidden features dashed along the bottom:
+the mounting-magnet bores (dashed violet rectangles) and the stacking grooves
+(dashed black rectangles). A key below the elevation names each of these line
+styles.](docs/images/tech_front.png)
 
 ### Detail sheet
 
