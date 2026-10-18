@@ -34,6 +34,36 @@ never changes -- it isn't one of the three.
 
 ---
 
+## 3.0.21 — Low-severity review fixes
+
+Iterative (unreleased). Plate and coupon geometry at the defaults are
+unchanged from 3.0.11 (triangle data byte-identical).
+
+### Changed
+- The CLI prints one labeled line per mesh: `plate | watertight: True |
+  volume cm3: ... | bbox: ... | faces: ...` and the same for `stack coupon`
+  (it used to print `stack coupon: True 8.09 cm3 [...]`) (#54).
+- All four drawings use at least 7 pt for every label, the front elevation
+  is a narrower figure so its labels read larger at README width, the 4 mm
+  rib-inset dimension no longer collapses into a bowtie, the front
+  elevation's 4.5 bore-height dimension sits outside the plate so its label
+  touches no outline, the key swatches have an outline, and the violet
+  extension lines on the top plan are no longer faded. The feature keys
+  under the top plan and front elevation are anchored to the drawing, so
+  the shorter front elevation no longer cuts off the bottom of its key
+  (#54).
+- Each README image links to its full-size file, and the Dimensions table
+  has real column headers (#54).
+
+### Fixed
+- With `side_branding=False`, a label is no longer limited by `plate_y`; it
+  only has to fit `plate_x` (#54).
+- A parameter too large for a float (`plate_x=10**400`) raises `ValueError`
+  naming it, not `TypeError` (#54).
+- `mag_inset_x` or `stack_inset_x` of half the plate or more raises
+  `ValueError` instead of returning bore or rib positions in descending
+  order (#54).
+
 ## 3.0.20 — Over-long labels are rejected at once
 
 Iterative (unreleased). Plate and coupon geometry at the defaults are

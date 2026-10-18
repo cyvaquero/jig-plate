@@ -95,3 +95,23 @@ def test_drawn_hidden_features_use_the_keys_line_style(tmp_path, fn):
         assert _style(p) in key_by_style, _style(p)
         assert tuple(p.get_edgecolor()) == tuple(key_by_style[_style(p)])
     assert {_style(p) for p in hidden} == set(key_by_style)
+
+
+@pytest.mark.parametrize("fn", [
+    "_plate_diagram", "_tech_top_plan", "_tech_front_elevation",
+    "_tech_detail"])
+def test_saved_drawing_has_a_clear_margin(tmp_path, fn):
+    """Nothing is cut off at the edge of the saved PNG: the outermost
+    pixels are all background (a key drawn outside the axes needs to reach
+    savefig's tight bounding box)."""
+    from matplotlib.colors import to_rgb
+    from matplotlib.image import imread
+    import numpy as np
+    out = tmp_path / "x.png"
+    getattr(cli, fn)(out, build_plate().geometry)
+    img = imread(out)[..., :3]
+    bg = np.array(to_rgb(cli.BG))
+    border = np.concatenate([img[:3].reshape(-1, 3), img[-3:].reshape(-1, 3),
+                             img[:, :3].reshape(-1, 3),
+                             img[:, -3:].reshape(-1, 3)])
+    assert np.abs(border - bg).max() < 0.02
