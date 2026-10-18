@@ -146,6 +146,10 @@ And into `images/`:
 - `jig_plate_<version>_tech_detail.png` — magnet-bore and stacking-joint
   detail sheet
 
+Each file is written to a temporary file and then moved into place, so a
+symlink already sitting at an output path is replaced, never written
+through.
+
 The script prints one labeled line per mesh (`plate` and `stack coupon`) with
 its watertight status, volume, bounding box, and face count. Both lines must
 report `watertight: True` or the geometry is broken;
@@ -187,6 +191,9 @@ result.geometry.stack_ys  # ...and Y positions — avoid these zones when
 argument (plate size, magnet spec/count/spacing, stacking rib/groove
 dimensions, the debossed label). See `jig_plate_base.py` for the full
 parameter list — all of it defaults to the same base plate this CLI ships.
+Dimensions take any real number (`int`, `float`, a numpy scalar such as
+`np.float32`) and `mag_count_x` any integer (`int`, `np.int64`); `bool`
+values and non-numbers raise `ValueError`.
 
 `build_plate()` rejects feature sizes too small to print with a `ValueError`
 naming the parameter and its minimum: `mag_d`, `mag_depth`, `stack_w`,
