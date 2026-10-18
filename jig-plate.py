@@ -779,6 +779,12 @@ Changelog
          (Item, Value) instead of an empty one. Verified: STL triangle
          data (bytes 80+) byte-identical to 3.0.11; both meshes
          watertight; full test suite passes.
+  3.0.26 docs only (#54): README and build_plate docstring say the
+         default bores need plate_z of about 7.7 mm, so side_branding=False
+         alone doesn't allow a thinner plate. Verified: plate_z=7.6 raises
+         and 7.7 builds at default bores; STL triangle data (bytes 80+)
+         byte-identical to 3.0.11; both meshes watertight; full test suite
+         passes.
 """
 import argparse
 import io
@@ -812,7 +818,7 @@ def _solid(color, alpha):
     fg, bg = _to_rgba(color), _to_rgba(BG)
     return tuple(alpha * c + (1 - alpha) * b for c, b in zip(fg[:3], bg[:3])) + (1.0,)
 
-VERSION = "3.0.25"
+VERSION = "3.0.26"
 OUT_DIR = Path(__file__).resolve().parent / "output"
 IMG_DIR = Path(__file__).resolve().parent / "images"
 

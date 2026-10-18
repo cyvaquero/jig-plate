@@ -307,8 +307,10 @@ def build_plate(
 
     `side_branding` (default True) debosses the logo and label on the left
     and right faces as well as the top face. Those side marks are a fixed
-    4 mm tall, so they need a `plate_z` of roughly 7.4 mm or more; pass
-    `side_branding=False` for a thinner plate. With False, the left and
+    4 mm tall, so they need a `plate_z` of roughly 7.4 mm or more; below
+    that pass `side_branding=False` (the default 6.1 mm bores need about
+    7.7 mm, so a thinner plate also needs a smaller `mag_d`/`mag_depth`).
+    With False, the left and
     right faces stay flat, and there is no side-face Z-fit check or
     side-face keep-out box. The top-face branding is unaffected. A
     non-bool value raises `ValueError`.
