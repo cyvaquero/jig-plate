@@ -720,6 +720,12 @@ Changelog
          so the mesh stays a volume) fails only that face's test(s);
          STL triangle data (bytes 80+) byte-identical to 3.0.11; both
          meshes watertight; full test suite passes.
+  3.0.18 drawing label contrast (#50): the "61.5 typ.", "magnet 6x3" and
+         "rib (top face)" labels were 2.87-3.57:1; they now use DIM_COLOR and
+         the new VIOLET_TEXT / AMBER_TEXT (lines and fills keep VIOLET and
+         AMBER), all >= 4.5:1. Verified: STL triangle data (bytes 80+)
+         byte-identical to 3.0.11; both meshes watertight; new test fails
+         on the old colors; drawings viewed; full test suite passes.
 """
 import argparse
 import sys
@@ -750,7 +756,7 @@ def _solid(color, alpha):
     fg, bg = _to_rgba(color), _to_rgba(BG)
     return tuple(alpha * c + (1 - alpha) * b for c, b in zip(fg[:3], bg[:3])) + (1.0,)
 
-VERSION = "3.0.17"
+VERSION = "3.0.18"
 OUT_DIR = Path(__file__).resolve().parent / "output"
 IMG_DIR = Path(__file__).resolve().parent / "images"
 
@@ -779,6 +785,10 @@ def stamp(path, text):
 # -------- diagram / technical drawing styling --------
 AMBER = "#BA7517"
 VIOLET = "#7F77DD"
+# darker variants for small text: VIOLET and AMBER are for lines and fills
+# only (3:1 non-text contrast); text needs 4.5:1 on BG or on the tinted fill
+VIOLET_TEXT = "#4f46b8"
+AMBER_TEXT = "#7a4a0e"
 SHAPE = "#888780"
 FG = "#1a1915"
 MUTED = "#6b6860"
@@ -1235,7 +1245,7 @@ def _tech_top_plan(out_path, geom):
             color=VIOLET, lw=EXT_LW, alpha=0.5)
     ax.text((geom.mag_xs[0] + geom.mag_xs[1]) / 2 * S, -7.5 * S,
             f"{geom.mag_xs[1] - geom.mag_xs[0]:.1f} typ.",
-            fontsize=6.5, ha="center", va="top", color=VIOLET,
+            fontsize=6.5, ha="center", va="top", color=DIM_COLOR,
             fontfamily="sans-serif")
 
     # stacking rib inset from the left edge
@@ -1387,7 +1397,7 @@ def _tech_detail(out_path, geom, magnet_d=MAGNET_D, magnet_len=MAGNET_LEN):
                   ls="--", zorder=4))
     ax1.text(magnet_len / 2 * S1, mag_cz * S1,
              f"magnet\n{magnet_d:g}×{magnet_len:g}",
-             fontsize=6.5, ha="center", va="center", color=VIOLET,
+             fontsize=6.5, ha="center", va="center", color=VIOLET_TEXT,
              fontfamily="sans-serif", fontstyle="italic", zorder=5)
 
     ax1.plot([leader_y0 * S1, plate_y1_m * S1],
@@ -1479,7 +1489,7 @@ def _tech_detail(out_path, geom, magnet_d=MAGNET_D, magnet_len=MAGNET_LEN):
 
     ax2.text(geom.stack_xs[0] * S2, (geom.plate_z + geom.stack_h + 0.8) * S2,
              "rib (top face)", fontsize=6.5, ha="center", va="bottom",
-             color=AMBER, fontfamily="sans-serif", fontstyle="italic",
+             color=AMBER_TEXT, fontfamily="sans-serif", fontstyle="italic",
              zorder=5)
     ax2.text(geom.stack_xs[0] * S2, (groove_depth / 2) * S2,
              "groove\n(bottom face)", fontsize=6, ha="center", va="center",
