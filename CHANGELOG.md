@@ -48,6 +48,17 @@ unchanged from 3.0.11 (triangle data byte-identical).
   told apart without relying on color. The README descriptions of both
   images say which hidden feature is which (#51).
 
+## 3.0.18 — Readable label colors on the technical drawings
+
+Iterative (unreleased). Plate and coupon geometry at the defaults are
+unchanged from 3.0.11 (triangle data byte-identical).
+
+### Fixed
+- The "61.5 typ." label on the top plan, the "magnet 6×3" label and the
+  "rib (top face)" label on the detail sheet are now dark enough to read
+  (at least 4.5:1 contrast; they were 2.9 to 3.6:1). The violet and amber
+  lines and fills are unchanged (#50).
+
 ## 3.0.17 — Faster text-orientation tests
 
 Iterative (unreleased). Tests only; the plate and coupon geometry are
