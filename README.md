@@ -146,6 +146,10 @@ And into `images/`:
 - `jig_plate_<version>_tech_detail.png` — magnet-bore and stacking-joint
   detail sheet
 
+Each file is written to a temporary file and then moved into place, so a
+symlink already sitting at an output path is replaced, never written
+through.
+
 The script prints one labeled line per mesh (`plate` and `stack coupon`) with
 its watertight status, volume, bounding box, and face count. Both lines must
 report `watertight: True` or the geometry is broken;
