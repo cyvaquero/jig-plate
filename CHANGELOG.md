@@ -47,6 +47,31 @@ unchanged from 3.0.11 (triangle data byte-identical).
   6,000-character label took about 5.5 s to be rejected; it now takes about
   0.14 s. Every label that built before still builds (#52).
 
+## 3.0.19 — Feature keys on the top plan and front elevation
+
+Iterative (unreleased). Plate and coupon geometry at the defaults are
+unchanged from 3.0.11 (triangle data byte-identical).
+
+### Fixed
+- The top plan and the front elevation each have a key under the drawing
+  that names the stacking groove, the mounting-magnet bore, the edge
+  magnet bores and the stacking rib. Hidden magnet bores are now dotted
+  and hidden grooves dashed on both sheets, and each key swatch is drawn
+  in the same line style and shape as its feature, so the features can be
+  told apart without relying on color. The README descriptions of both
+  images say which hidden feature is which (#51).
+
+## 3.0.18 — Readable label colors on the technical drawings
+
+Iterative (unreleased). Plate and coupon geometry at the defaults are
+unchanged from 3.0.11 (triangle data byte-identical).
+
+### Fixed
+- The "61.5 typ." label on the top plan, the "magnet 6×3" label and the
+  "rib (top face)" label on the detail sheet are now dark enough to read
+  (at least 4.5:1 contrast; they were 2.9 to 3.6:1). The violet and amber
+  lines and fills are unchanged (#50).
+
 ## 3.0.17 — Faster text-orientation tests
 
 Iterative (unreleased). Tests only; the plate and coupon geometry are
