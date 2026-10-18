@@ -18,6 +18,7 @@ out pockets that avoid them. File I/O, diagrams, and the CLI stay in
 """
 import dataclasses
 import math
+import numbers
 
 import numpy as np
 import trimesh
@@ -251,6 +252,22 @@ def _add_deboss_right(poly_list, target, plate_x, plate_y, deboss_d):
             target.append(m)
 
 
+def _is_bool(value):
+    """True for `bool` and `np.bool_` (which is not a `bool` subclass).
+
+    numpy does not register `np.bool_` as a `numbers.Real`, so the number
+    checks reject it anyway; it is named here so that stays true if that changes.
+    """
+    return isinstance(value, (bool, np.bool_))
+
+
+def _native(value):
+    """A plain Python `int` or `float`; builtin ints and floats pass through."""
+    if type(value) in (int, float):
+        return value
+    return float(value)
+
+
 def build_plate(
     *,
     plate_x=246.0, plate_y=218.0, plate_z=9.0,
@@ -331,7 +348,7 @@ def build_plate(
         ("stack_inset_x", stack_inset_x), ("stack_inset_y", stack_inset_y),
         ("deboss_d", deboss_d),
     ):
-        if isinstance(_value, bool) or not isinstance(_value, (int, float)):
+        if _is_bool(_value) or not isinstance(_value, numbers.Real):
             raise ValueError(f"{_name} must be a number, got {_value!r}")
         # math.isfinite, not np.isfinite: it accepts any int, and raises
         # OverflowError for one too large for a float (10**400), which
@@ -343,8 +360,19 @@ def build_plate(
         if not _finite:
             raise ValueError(
                 f"{_name} must be finite, got {_value!r:.40}")
-    if isinstance(mag_count_x, bool) or not isinstance(mag_count_x, int):
+    if _is_bool(mag_count_x) or not isinstance(mag_count_x, numbers.Integral):
         raise ValueError(f"mag_count_x must be an int, got {mag_count_x!r}")
+    # numpy scalars (np.float32, np.int64) pass the checks above; hand the
+    # geometry plain Python numbers so float32 arithmetic can't leak in
+    (plate_x, plate_y, plate_z, mag_d, mag_depth, mag_inset_x,
+     bottom_mag_inset_x, front_margin, back_margin, stack_w, stack_len,
+     stack_h, stack_play, stack_inset_x, stack_inset_y, deboss_d) = (
+        _native(v) for v in (
+            plate_x, plate_y, plate_z, mag_d, mag_depth, mag_inset_x,
+            bottom_mag_inset_x, front_margin, back_margin, stack_w,
+            stack_len, stack_h, stack_play, stack_inset_x, stack_inset_y,
+            deboss_d))
+    mag_count_x = int(mag_count_x)
 
     if plate_x <= 0 or plate_y <= 0 or plate_z <= 0:
         raise ValueError(

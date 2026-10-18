@@ -34,6 +34,22 @@ never changes -- it isn't one of the three.
 
 ---
 
+## 3.0.24 — numpy scalars accepted as parameters
+
+Iterative (unreleased). Plate and coupon geometry at the defaults are
+unchanged from 3.0.11 (triangle data byte-identical); the drawings are
+unchanged.
+
+### Changed
+- `build_plate()` accepts numpy scalars such as `np.float32` and `np.int64`
+  (and any other `numbers.Real` / `numbers.Integral`) for its dimensions
+  and `mag_count_x`; it used to raise `ValueError` for them. `bool` and
+  `np.bool_` are still rejected, as are non-numbers, and the finite check
+  applies to every accepted type. Values reach the geometry as plain Python
+  numbers, so `build_plate(plate_x=np.float32(246.0), mag_count_x=np.int64(4))`
+  builds the same mesh as `build_plate()` (the last remaining info line of
+  #54).
+
 ## 3.0.22 — Repo rules for drawings and the accessibility review
 
 Iterative (unreleased). Docs only; the plate and coupon geometry are
