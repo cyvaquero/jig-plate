@@ -34,6 +34,18 @@ never changes -- it isn't one of the three.
 
 ---
 
+## 3.0.22 — Repo rules for drawings and the accessibility review
+
+Iterative (unreleased). Docs only; the plate and coupon geometry are
+unchanged from 3.0.11 (triangle data byte-identical).
+
+### Changed
+- `CLAUDE.md` now says the README's copies of the drawings in
+  `docs/images/` are refreshed at every release bump as well as on a
+  drawing change, and that the drawing code and CLI output count as text
+  shown to readers, so a change to either calls for the accessibility
+  reviewer.
+
 ## 3.0.21 — Low-severity review fixes
 
 Iterative (unreleased). Plate and coupon geometry at the defaults are
