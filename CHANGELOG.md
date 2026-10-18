@@ -1,6 +1,6 @@
 # Jig Plate — Changelog
 
-| | |
+| Item | Value |
 |---|---|
 | **Generator (CLI)** | `jig-plate.py` |
 | **Generator (library)** | `jig_plate_base.py` (`build_plate()`) |
@@ -33,6 +33,16 @@ with `head -c 80 file.stl`). The generator's own filename (`jig-plate.py`)
 never changes -- it isn't one of the three.
 
 ---
+
+## 3.0.25 — CHANGELOG summary table header
+
+Iterative (unreleased). Docs only; the plate and coupon geometry are
+unchanged from 3.0.11 (triangle data byte-identical).
+
+### Fixed
+- The summary table at the top of this file has a real header row
+  (`Item`, `Value`) instead of an empty one, so screen readers no longer
+  announce blank column headers (#60).
 
 ## 3.0.22 — Repo rules for drawings and the accessibility review
 
