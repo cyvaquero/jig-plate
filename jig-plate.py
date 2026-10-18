@@ -726,6 +726,14 @@ Changelog
          AMBER), all >= 4.5:1. Verified: STL triangle data (bytes 80+)
          byte-identical to 3.0.11; both meshes watertight; new test fails
          on the old colors; drawings viewed; full test suite passes.
+  3.0.19 drawing feature keys (#51): the top plan and front elevation each
+         carry a key naming the stacking groove, the mounting and edge
+         magnet bores and the rib, with each swatch in the line style the
+         feature is drawn in (add_key gained a points-based mode); hidden
+         magnet bores are dotted and hidden grooves dashed on both sheets. Verified:
+         STL triangle data (bytes 80+) byte-identical to 3.0.11; both
+         meshes watertight; new tests fail without the key or with a
+         wrong swatch style; drawings viewed; full test suite passes.
 """
 import argparse
 import sys
@@ -756,7 +764,7 @@ def _solid(color, alpha):
     fg, bg = _to_rgba(color), _to_rgba(BG)
     return tuple(alpha * c + (1 - alpha) * b for c, b in zip(fg[:3], bg[:3])) + (1.0,)
 
-VERSION = "3.0.18"
+VERSION = "3.0.19"
 OUT_DIR = Path(__file__).resolve().parent / "output"
 IMG_DIR = Path(__file__).resolve().parent / "images"
 
@@ -829,16 +837,63 @@ def leader(ax, anchor, text_pos, label, ha="left", dashed=True):
             zorder=6)
 
 
-def add_key(ax, items, y_pos):
-    total_w = sum(len(label) * 5.5 + 22 for label, _ in items)
+def add_key(ax, items, y_pos=None, below_pt=None):
+    """Draw a key of (label, color) swatches.
+
+    Default (y_pos, in data units): one centered row of color swatches, as
+    on the isometric overview.
+
+    With below_pt: a column of feature entries under the axes, laid out in
+    points so it reads the same whatever the drawing's scale. Each item is
+    (label, color, style) where style gives the swatch outline: `shape`
+    ("rect" or "circle"), `ls` (line style, drawn as the feature is drawn,
+    so the key does not rely on color) and `fc` (fill or "none"). Call it
+    after the view is final: it positions the key from the axes box.
+    """
+    if below_pt is not None:
+        _add_point_key(ax, items, below_pt)
+        return
+    total_w = sum(len(label) * 5.5 + 22 for label, *_ in items)
     x = -total_w / 2
-    for label, color in items:
+    for label, color, *_ in items:
         ax.add_patch(FancyBboxPatch((x, y_pos - 5), 11, 11,
                      boxstyle="round,pad=1", fc=color, ec="none",
                      alpha=0.7, zorder=5))
         ax.text(x + 16, y_pos + 0.5, label, fontsize=7.5,
                 color=MUTED, va="center", fontfamily="sans-serif", zorder=5)
         x += len(label) * 5.5 + 30
+
+
+KEY_ROW_PT = 13.0
+KEY_SWATCH_W_PT = 24.0
+KEY_SWATCH_H_PT = 9.0
+
+
+def _add_point_key(ax, items, below_pt):
+    from matplotlib.patches import Circle, Rectangle
+    from matplotlib.transforms import Affine2D
+    fig = ax.figure
+    ax.apply_aspect()
+    box = ax.get_position()
+    # points -> display pixels, origin at the figure's lower-left corner
+    to_px = Affine2D().scale(1 / 72) + fig.dpi_scale_trans
+    x0 = box.x0 * fig.get_figwidth() * 72
+    y_top = box.y0 * fig.get_figheight() * 72 - below_pt
+    for i, (label, color, style) in enumerate(items):
+        yc = y_top - i * KEY_ROW_PT
+        kw = dict(fc=style.get("fc", "none"), ec=color, lw=style.get("lw", 0.9),
+                  ls=style.get("ls", "-"), transform=to_px, clip_on=False,
+                  zorder=5)
+        if style.get("shape") == "circle":
+            patch = Circle((x0 + KEY_SWATCH_W_PT / 2, yc),
+                           KEY_SWATCH_H_PT / 2, **kw)
+        else:
+            patch = Rectangle((x0, yc - KEY_SWATCH_H_PT / 2),
+                              KEY_SWATCH_W_PT, KEY_SWATCH_H_PT, **kw)
+        ax.add_patch(patch)
+        ax.text(x0 + KEY_SWATCH_W_PT + 6, yc, label, fontsize=7,
+                color=DIM_COLOR, va="center", ha="left",
+                fontfamily="sans-serif", transform=to_px, zorder=5)
 
 
 # ---- plate diagram (isometric) ----
@@ -1033,6 +1088,11 @@ HATCH_LW = 0.3
 CUT_LW = 1.2
 HIDDEN_LW = 0.5
 HIDDEN_LS = (0, (4, 2))
+# hidden magnet bores are dotted, hidden grooves dashed, so the two differ
+# by line pattern and not only by color (WCAG 1.4.1); a little heavier so
+# the dots read at 3:1 and at README width
+HIDDEN_BORE_LS = (0, (1, 1.5))
+HIDDEN_BORE_LW = 0.9
 # dimension text interrupts whatever it crosses, as on a real drawing
 _DIM_LABEL_BBOX = dict(facecolor=BG, edgecolor="none", pad=0.15)
 
@@ -1158,6 +1218,30 @@ def _title_block(ax, title):
             color=MUTED, fontfamily="sans-serif")
 
 
+# Feature keys for the top plan and the front elevation. Each swatch uses
+# the line style the feature is drawn in, and each label names the feature
+# and the face it is on, so the key does not rely on color.
+KEY_GROOVE = ("dashed rectangle: stacking groove (hidden, bottom face)",
+              FG, dict(ls=HIDDEN_LS))
+KEY_RIB = ("solid filled rectangle: stacking rib (top face)",
+           FG, dict(fc=_faint(AMBER, 0.6), lw=0.6))
+KEY_BOTTOM_BORE_CIRCLE = (
+    "dotted circle: mounting magnet bore (hidden, bottom face)",
+    VIOLET, dict(shape="circle", ls=HIDDEN_BORE_LS, lw=HIDDEN_BORE_LW))
+KEY_BOTTOM_BORE_RECT = (
+    "dotted rectangle: mounting magnet bore (hidden, bottom face)",
+    VIOLET, dict(ls=HIDDEN_BORE_LS, lw=HIDDEN_BORE_LW))
+KEY_EDGE_BORE = (
+    "dotted rectangle at the edge: magnet bore (hidden, front and back faces)",
+    VIOLET, dict(ls=HIDDEN_BORE_LS, lw=HIDDEN_BORE_LW))
+KEY_FRONT_BORE = (
+    "solid circle: magnet bore (front face)",
+    VIOLET, dict(shape="circle", fc=_faint(VIOLET, 0.15), lw=0.8))
+TOP_PLAN_KEY = [KEY_GROOVE, KEY_BOTTOM_BORE_CIRCLE, KEY_EDGE_BORE, KEY_RIB]
+FRONT_KEY = [KEY_FRONT_BORE, KEY_BOTTOM_BORE_RECT, KEY_GROOVE, KEY_RIB]
+FEATURE_KEY_GAP_PT = 26.0
+
+
 # ---- technical drawing 1: dimensioned top plan view ----
 def _tech_top_plan(out_path, geom):
     S = 2.0
@@ -1177,29 +1261,29 @@ def _tech_top_plan(out_path, geom):
     # rectangle starting at the face and receding into the material,
     # not a circle centered on the edge (half of which would render
     # outside the part). Hidden from this top-down view past the
-    # entrance, so dashed like the bottom-face bores below.
+    # entrance, so dotted like the bottom-face bores below.
     for mx in geom.mag_xs:
         for y_face, into_sign in ((0.0, 1.0), (geom.plate_y, -1.0)):
             y0 = y_face if into_sign > 0 else y_face - geom.mag_depth
             ax.add_patch(plt.Rectangle(
                 (mx * S - geom.mag_d * S / 2, y0 * S),
                 geom.mag_d * S, geom.mag_depth * S,
-                fc="none", ec=VIOLET, lw=HIDDEN_LW, ls=HIDDEN_LS, zorder=5))
+                fc="none", ec=VIOLET, lw=HIDDEN_BORE_LW, ls=HIDDEN_BORE_LS, zorder=5))
             ax.plot(mx * S, y_face * S, "+", color=VIOLET, ms=3, mew=0.6,
                     zorder=5)
 
     # bottom-face mounting magnets: also hidden (blind, drilled straight
-    # up from the underside), drawn dashed for the same reason
+    # up from the underside), drawn dotted for the same reason
     for mx in (geom.bottom_mag_inset_x, geom.plate_x - geom.bottom_mag_inset_x):
         for my in geom.bottom_mag_ys:
             ax.add_patch(plt.Circle((mx * S, my * S), geom.mag_d * S / 2,
-                         fc="none", ec=VIOLET, lw=HIDDEN_LW, ls=HIDDEN_LS,
+                         fc="none", ec=VIOLET, lw=HIDDEN_BORE_LW, ls=HIDDEN_BORE_LS,
                          zorder=5))
             ax.plot(mx * S, my * S, "+", color=VIOLET, ms=3, mew=0.6,
                     zorder=5)
 
     # corner stacking ribs (top face, visible) / grooves (bottom face,
-    # hidden -- dashed, same convention as the bottom-corner bores above)
+    # hidden -- dashed, unlike the dotted bores above)
     for mx in geom.stack_xs:
         for my in geom.stack_ys:
             groove_len = geom.stack_len + geom.stack_play
@@ -1257,6 +1341,7 @@ def _tech_top_plan(out_path, geom):
 
     ax.autoscale_view()
     ax.margins(0.06)
+    add_key(ax, TOP_PLAN_KEY, below_pt=FEATURE_KEY_GAP_PT)
     fig.savefig(out_path, dpi=200, bbox_inches="tight", pad_inches=0.4,
                 facecolor=BG)
     plt.close(fig)
@@ -1302,7 +1387,7 @@ def _tech_front_elevation(out_path, geom):
         ax.add_patch(plt.Rectangle(
             ((bore_cx - geom.mag_d / 2) * S, 0),
             geom.mag_d * S, geom.mag_depth * S,
-            fc="none", ec=VIOLET, lw=HIDDEN_LW, ls=HIDDEN_LS, zorder=5))
+            fc="none", ec=VIOLET, lw=HIDDEN_BORE_LW, ls=HIDDEN_BORE_LS, zorder=5))
     for groove_cx in geom.stack_xs:
         groove_len = geom.stack_len + geom.stack_play
         ax.add_patch(plt.Rectangle(
@@ -1326,6 +1411,7 @@ def _tech_front_elevation(out_path, geom):
 
     ax.autoscale_view()
     ax.margins(x=0.03, y=0.15)
+    add_key(ax, FRONT_KEY, below_pt=FEATURE_KEY_GAP_PT)
     fig.savefig(out_path, dpi=200, bbox_inches="tight", pad_inches=0.3,
                 facecolor=BG)
     plt.close(fig)
