@@ -44,6 +44,35 @@ unchanged from 3.0.11 (triangle data byte-identical).
   (`Item`, `Value`) instead of an empty one, so screen readers no longer
   announce blank column headers (#60).
 
+## 3.0.24 — numpy scalars accepted as parameters
+
+Iterative (unreleased). Plate and coupon geometry at the defaults are
+unchanged from 3.0.11 (triangle data byte-identical); the drawings are
+unchanged.
+
+### Changed
+- `build_plate()` accepts numpy scalars such as `np.float32` and `np.int64`
+  (and any other `numbers.Real` / `numbers.Integral`) for its dimensions
+  and `mag_count_x`; it used to raise `ValueError` for them. `bool` and
+  `np.bool_` are still rejected, as are non-numbers, and the finite check
+  applies to every accepted type. Values reach the geometry as plain Python
+  numbers, so `build_plate(plate_x=np.float32(246.0), mag_count_x=np.int64(4))`
+  builds the same mesh as `build_plate()` (the last remaining info line of
+  #54).
+
+## 3.0.23 — Output files no longer written through symlinks
+
+Iterative (unreleased). Plate and coupon geometry are unchanged from 3.0.11
+(triangle data byte-identical); the drawings are unchanged.
+
+### Fixed
+- The CLI no longer follows a symlink at an output path: if `output/` or
+  `images/` held a symlink named like one of the generated STLs or PNGs, the
+  file it pointed to was overwritten. Every STL and PNG is now built in
+  memory, written to a temporary file in the same directory and moved onto
+  the target, so a symlink is replaced by a regular file and a failed write
+  leaves no partial or temporary file behind (#53).
+
 ## 3.0.22 — Repo rules for drawings and the accessibility review
 
 Iterative (unreleased). Docs only; the plate and coupon geometry are
