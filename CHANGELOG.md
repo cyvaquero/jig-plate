@@ -47,9 +47,11 @@ unchanged from 3.0.11 (triangle data byte-identical).
   is a narrower figure so its labels read larger at README width, the 4 mm
   rib-inset dimension no longer collapses into a bowtie, the front
   elevation's 4.5 bore-height dimension sits outside the plate so its label
-  touches no outline, the key swatches
-  have an outline, and the violet extension lines on the top plan are no
-  longer faded (#54).
+  touches no outline, the key swatches have an outline, and the violet
+  extension lines on the top plan are no longer faded. The feature keys
+  under the top plan and front elevation are anchored to the drawing, so
+  the shorter front elevation no longer cuts off the bottom of its key
+  (#54).
 - Each README image links to its full-size file, and the Dimensions table
   has real column headers (#54).
 
@@ -61,6 +63,44 @@ unchanged from 3.0.11 (triangle data byte-identical).
 - `mag_inset_x` or `stack_inset_x` of half the plate or more raises
   `ValueError` instead of returning bore or rib positions in descending
   order (#54).
+
+## 3.0.20 — Over-long labels are rejected at once
+
+Iterative (unreleased). Plate and coupon geometry at the defaults are
+unchanged from 3.0.11 (triangle data byte-identical).
+
+### Fixed
+- `build_plate()` now measures the label's width before rendering its
+  glyphs and raises the same `ValueError` immediately for a label whose
+  inked part is wider than the plate (spaces and other characters with no
+  outline at the start or end of the label don't count, as before). A
+  6,000-character label took about 5.5 s to be rejected; it now takes about
+  0.14 s. Every label that built before still builds (#52).
+
+## 3.0.19 — Feature keys on the top plan and front elevation
+
+Iterative (unreleased). Plate and coupon geometry at the defaults are
+unchanged from 3.0.11 (triangle data byte-identical).
+
+### Fixed
+- The top plan and the front elevation each have a key under the drawing
+  that names the stacking groove, the mounting-magnet bore, the edge
+  magnet bores and the stacking rib. Hidden magnet bores are now dotted
+  and hidden grooves dashed on both sheets, and each key swatch is drawn
+  in the same line style and shape as its feature, so the features can be
+  told apart without relying on color. The README descriptions of both
+  images say which hidden feature is which (#51).
+
+## 3.0.18 — Readable label colors on the technical drawings
+
+Iterative (unreleased). Plate and coupon geometry at the defaults are
+unchanged from 3.0.11 (triangle data byte-identical).
+
+### Fixed
+- The "61.5 typ." label on the top plan, the "magnet 6×3" label and the
+  "rib (top face)" label on the detail sheet are now dark enough to read
+  (at least 4.5:1 contrast; they were 2.9 to 3.6:1). The violet and amber
+  lines and fills are unchanged (#50).
 
 ## 3.0.17 — Faster text-orientation tests
 
