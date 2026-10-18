@@ -769,6 +769,12 @@ Changelog
          file. stamp() now takes and returns bytes. Verified: STL triangle
          data (bytes 80+) byte-identical to 3.0.11; both meshes watertight;
          PNGs byte-identical to 3.0.22 renders; full test suite passes.
+  3.0.24 build_plate() accepts numpy scalars (np.float32, np.int64) and any
+         numbers.Real/Integral for its parameters, still rejecting bool and
+         np.bool_; values reach the geometry as plain Python numbers.
+         Verified: STL triangle data (bytes 80+) byte-identical to 3.0.11;
+         np.float32/np.int64 build is byte-identical to the defaults; both
+         meshes watertight; full test suite passes.
 """
 import argparse
 import io
@@ -802,7 +808,7 @@ def _solid(color, alpha):
     fg, bg = _to_rgba(color), _to_rgba(BG)
     return tuple(alpha * c + (1 - alpha) * b for c, b in zip(fg[:3], bg[:3])) + (1.0,)
 
-VERSION = "3.0.23"
+VERSION = "3.0.24"
 OUT_DIR = Path(__file__).resolve().parent / "output"
 IMG_DIR = Path(__file__).resolve().parent / "images"
 

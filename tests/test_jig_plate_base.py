@@ -681,3 +681,72 @@ class TestPurity:
         monkeypatch.chdir(tmp_path)
         build_plate()
         assert list(tmp_path.iterdir()) == []
+
+
+class TestNumpyAndNumberTypes:
+    """Any real number is accepted for the float parameters and any integer
+    for mag_count_x, numpy scalars included; bools of either kind and
+    non-numbers are still rejected."""
+
+    @staticmethod
+    def _stl(result):
+        return result.solid.export(file_type="stl")
+
+    def test_numpy_scalars_build_the_identical_default_plate(self):
+        import numpy as np
+
+        default = self._stl(build_plate())
+        result = build_plate(
+            plate_x=np.float32(246.0), plate_y=np.float64(218.0),
+            plate_z=np.float32(9.0), mag_d=np.float64(6.1),
+            mag_count_x=np.int64(4), stack_w=np.float32(1.5),
+        )
+        # 6.1 as float64 is the default exactly; the float32 values above
+        # are exactly representable, so the mesh must match byte for byte
+        assert self._stl(result) == default
+
+    def test_numpy_integers_and_fractions_are_accepted(self):
+        import fractions
+
+        import numpy as np
+
+        build_plate(mag_count_x=np.int32(4), plate_y=np.int64(218))
+        build_plate(plate_y=fractions.Fraction(218))
+
+    def test_geometry_holds_plain_python_numbers(self):
+        import numpy as np
+
+        geom = build_plate(plate_x=np.float32(246.0)).geometry
+        assert type(geom.plate_x) is float
+
+    @pytest.mark.parametrize("name,value", [
+        ("plate_x", True), ("plate_x", "246"), ("plate_x", None),
+        ("mag_d", "6.1"),
+    ])
+    def test_bools_and_non_numbers_still_rejected_for_floats(self, name, value):
+        with pytest.raises(ValueError, match=f"{name} must be a number"):
+            build_plate(**{name: value})
+
+    def test_numpy_bool_rejected_for_floats(self):
+        import numpy as np
+
+        with pytest.raises(ValueError, match="plate_x must be a number"):
+            build_plate(plate_x=np.bool_(True))
+
+    @pytest.mark.parametrize("value", [True, "4", 4.0, None])
+    def test_bools_and_non_integers_still_rejected_for_mag_count_x(self, value):
+        with pytest.raises(ValueError, match="mag_count_x must be an int"):
+            build_plate(mag_count_x=value)
+
+    def test_numpy_bool_rejected_for_mag_count_x(self):
+        import numpy as np
+
+        with pytest.raises(ValueError, match="mag_count_x must be an int"):
+            build_plate(mag_count_x=np.bool_(True))
+
+    def test_non_finite_numpy_values_still_rejected(self):
+        import numpy as np
+
+        for bad in (np.float32("nan"), np.float64("inf")):
+            with pytest.raises(ValueError, match="plate_x must be finite"):
+                build_plate(plate_x=bad)
