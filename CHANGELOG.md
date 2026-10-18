@@ -34,6 +34,17 @@ never changes -- it isn't one of the three.
 
 ---
 
+## 3.0.26 — Thin-plate limits stated correctly
+
+Iterative (unreleased). Docs only; the plate and coupon geometry are
+unchanged from 3.0.11 (triangle data byte-identical).
+
+### Fixed
+- The README and the `build_plate()` docstring no longer suggest that
+  `side_branding=False` alone allows a thinner plate: the default 6.1 mm
+  magnet bores need a `plate_z` of about 7.7 mm, so a plate thinner than
+  that also needs a smaller `mag_d`/`mag_depth` (#54).
+
 ## 3.0.25 — CHANGELOG summary table header
 
 Iterative (unreleased). Docs only; the plate and coupon geometry are
