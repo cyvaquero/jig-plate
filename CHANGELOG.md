@@ -34,6 +34,19 @@ never changes -- it isn't one of the three.
 
 ---
 
+## 3.0.23 — Output files no longer written through symlinks
+
+Iterative (unreleased). Plate and coupon geometry are unchanged from 3.0.11
+(triangle data byte-identical); the drawings are unchanged.
+
+### Fixed
+- The CLI no longer follows a symlink at an output path: if `output/` or
+  `images/` held a symlink named like one of the generated STLs or PNGs, the
+  file it pointed to was overwritten. Every STL and PNG is now built in
+  memory, written to a temporary file in the same directory and moved onto
+  the target, so a symlink is replaced by a regular file and a failed write
+  leaves no partial or temporary file behind (#53).
+
 ## 3.0.22 — Repo rules for drawings and the accessibility review
 
 Iterative (unreleased). Docs only; the plate and coupon geometry are
