@@ -762,9 +762,19 @@ Changelog
          and CLI output as reader-facing text for the accessibility
          reviewer. Verified: STL triangle data (bytes 80+) byte-identical
          to 3.0.11; both meshes watertight; full test suite passes.
+  3.0.23 the CLI no longer writes through a symlink at an output path: each
+         STL and PNG is built in memory and written to a temp file in the
+         target's directory, then os.replace()d onto it, so a symlink is
+         replaced instead of followed and a failed write leaves no partial
+         file. stamp() now takes and returns bytes. Verified: STL triangle
+         data (bytes 80+) byte-identical to 3.0.11; both meshes watertight;
+         PNGs byte-identical to 3.0.22 renders; full test suite passes.
 """
 import argparse
+import io
+import os
 import sys
+import tempfile
 from pathlib import Path
 
 import numpy as np
@@ -792,7 +802,7 @@ def _solid(color, alpha):
     fg, bg = _to_rgba(color), _to_rgba(BG)
     return tuple(alpha * c + (1 - alpha) * b for c, b in zip(fg[:3], bg[:3])) + (1.0,)
 
-VERSION = "3.0.22"
+VERSION = "3.0.23"
 OUT_DIR = Path(__file__).resolve().parent / "output"
 IMG_DIR = Path(__file__).resolve().parent / "images"
 
@@ -804,18 +814,56 @@ MAGNET_D = 6.0
 MAGNET_LEN = 3.0
 
 
+def write_atomic(path, data):
+    """Write `data` (bytes) to `path` via a temp file and os.replace().
+
+    The temp file sits in the target's directory so the replace stays on
+    one filesystem. os.replace() swaps the directory entry, so a symlink
+    already at `path` is replaced, not followed: the file it points to is
+    never touched. The temp file is removed if anything fails.
+    """
+    path = Path(path)
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=path.name + ".",
+                               suffix=".tmp")
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(data)
+        # mkstemp makes the file 0600; match what open() would have given
+        umask = os.umask(0)
+        os.umask(umask)
+        os.chmod(tmp, 0o666 & ~umask)
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except FileNotFoundError:
+            pass
+        raise
+
+
+def _export_stl(mesh, path, text):
+    """Export `mesh` as binary STL with the version header, written once."""
+    write_atomic(path, stamp(mesh.export(file_type="stl"), text))
+
+
+def _save_png(fig, path, **kwargs):
+    """Render `fig` to PNG in memory and write it with write_atomic()."""
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", **kwargs)
+    write_atomic(path, buf.getvalue())
+
+
 # stamp the 80-byte binary STL header so the version travels with the file
-def stamp(path, text):
+def stamp(data, text):
     # explicitly truncated to 80 bytes before the pad: `.ljust(80, ...)`
     # alone only pads a *short* string -- for one already >= 80 bytes it
     # returns it unchanged, and assigning that into b[0:80] doesn't
     # truncate either, it grows the bytearray and shifts every byte of
     # the binary STL body after it, silently corrupting the file.
     header = text.encode("ascii")[:80].ljust(80, b"\x00")
-    path = Path(path)
-    b = bytearray(path.read_bytes())
+    b = bytearray(data)
     b[0:80] = header
-    path.write_bytes(b)
+    return bytes(b)
 
 
 # -------- diagram / technical drawing styling --------
@@ -1109,7 +1157,7 @@ def _plate_diagram(out_path, geom):
 
     ax.autoscale_view()
     ax.margins(0.08)
-    fig.savefig(out_path, dpi=200, bbox_inches="tight", pad_inches=0.3,
+    _save_png(fig, out_path, dpi=200, bbox_inches="tight", pad_inches=0.3,
                 facecolor=BG)
     plt.close(fig)
     print("wrote", out_path)
@@ -1378,7 +1426,7 @@ def _tech_top_plan(out_path, geom):
     ax.autoscale_view()
     ax.margins(0.06)
     add_key(ax, TOP_PLAN_KEY, below_pt=FEATURE_KEY_GAP_PT)
-    fig.savefig(out_path, dpi=200, bbox_inches="tight", pad_inches=0.4,
+    _save_png(fig, out_path, dpi=200, bbox_inches="tight", pad_inches=0.4,
                 facecolor=BG)
     plt.close(fig)
     print("wrote", out_path)
@@ -1451,7 +1499,7 @@ def _tech_front_elevation(out_path, geom):
     ax.autoscale_view()
     ax.margins(x=0.03, y=0.15)
     add_key(ax, FRONT_KEY, below_pt=FEATURE_KEY_GAP_PT)
-    fig.savefig(out_path, dpi=200, bbox_inches="tight", pad_inches=0.3,
+    _save_png(fig, out_path, dpi=200, bbox_inches="tight", pad_inches=0.3,
                 facecolor=BG)
     plt.close(fig)
     print("wrote", out_path)
@@ -1678,7 +1726,7 @@ def _tech_detail(out_path, geom, magnet_d=MAGNET_D, magnet_len=MAGNET_LEN):
 
     _fit_view(ax1, ax2)
 
-    fig.savefig(out_path, dpi=200, bbox_inches="tight", pad_inches=0.3,
+    _save_png(fig, out_path, dpi=200, bbox_inches="tight", pad_inches=0.3,
                 facecolor=BG)
     plt.close(fig)
     print("wrote", out_path)
@@ -1720,14 +1768,13 @@ def main():
 
     OUT_DIR.mkdir(exist_ok=True)
     OUT = OUT_DIR / f"jig_plate_{VERSION}.stl"
-    solid.export(OUT)
-    print("wrote", OUT)
-    stamp(
-        OUT,
+    _export_stl(
+        solid, OUT,
         f"Jig plate {VERSION} | "
         f"{geom.plate_x:.0f}x{geom.plate_y:.0f}x{geom.plate_z + geom.stack_h:.1f}mm | "
         f"base plate, no pockets",
     )
+    print("wrote", OUT)
 
     # test coupon: front-right corner, carrying the stacking rib/groove,
     # its bottom mounting magnet, AND (at the default mag_xs) the
@@ -1748,14 +1795,13 @@ def main():
         [solid, bx(SC_X0, SC_Y0, -1, geom.plate_x, SC_Y1, geom.plate_z + geom.stack_h + 1)],
         engine="manifold",
     )
-    stack_coupon.export(STACK_COUPON)
-    print("wrote", STACK_COUPON)
-    stamp(
-        STACK_COUPON,
+    _export_stl(
+        stack_coupon, STACK_COUPON,
         f"Jig plate {VERSION} | "
         f"stack coupon {geom.plate_x - SC_X0:g}x{SC_Y1 - SC_Y0:g}"
         f"x{geom.plate_z + geom.stack_h:.1f}mm | corner, magnet+rib wall test",
     )
+    print("wrote", STACK_COUPON)
     failed = [
         name for name, mesh in (("plate", solid), ("stack coupon", stack_coupon))
         if not mesh.is_watertight
