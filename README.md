@@ -187,6 +187,9 @@ result.geometry.stack_ys  # ...and Y positions — avoid these zones when
 argument (plate size, magnet spec/count/spacing, stacking rib/groove
 dimensions, the debossed label). See `jig_plate_base.py` for the full
 parameter list — all of it defaults to the same base plate this CLI ships.
+Dimensions take any real number (`int`, `float`, a numpy scalar such as
+`np.float32`) and `mag_count_x` any integer (`int`, `np.int64`); `bool`
+values and non-numbers raise `ValueError`.
 
 `build_plate()` rejects feature sizes too small to print with a `ValueError`
 naming the parameter and its minimum: `mag_d`, `mag_depth`, `stack_w`,
