@@ -8,9 +8,8 @@ those are added on top of this base by blank-specific scripts.
 joint) as binary STL with trimesh and the manifold boolean engine, and
 renders diagrams and technical drawings with matplotlib.
 
-The global rules in `~/.claude/CLAUDE.md` and the `release` and
-`blind-review` skills apply in full; this file holds only what is specific
-to this repo.
+The global rules in `~/.claude/CLAUDE.md` and its skills apply in full;
+this file holds only what is specific to this repo.
 
 ## Two files, two roles
 
@@ -32,9 +31,9 @@ CLI-only belongs in `jig-plate.py`.
 ```
 
 Writes STLs to `output/` and PNGs to `images/`, both gitignored. The script
-prints `watertight: True` for the plate and `stack coupon: True` for the
-coupon (that flag is its watertightness). If either is `False`, the
-geometry is broken and must not be released (the script then also
+prints one line per mesh, `plate` and `stack coupon`, each with
+`watertight: True` plus volume, bbox and face count. If either is `False`,
+the geometry is broken and must not be released (the script then also
 exits 1, after still writing the files).
 
 From another generator script:
@@ -85,8 +84,9 @@ Run the CLI before and after every change and report the comparison.
 ## Blind review scope
 
 There is no UI. The accessibility reviewer covers the docs (README images
-need text alternatives), the CLI output, and the generated drawings
-(legibility, use of color, label contrast).
+need text alternatives), the CLI output and the generated drawings
+(legibility, use of color, label contrast). Drawing code in `jig-plate.py`
+and CLI output count as text shown to readers: a change to either runs it.
 
 ## Spelling
 
@@ -96,7 +96,7 @@ American English in code, comments, docs and generated text.
 
 An isometric overview diagram with a ×6 corner-rib inset, and dimensioned
 technical drawings (top plan, front elevation, magnet-bore and stacking-joint
-detail sheet). A drawing change is versioned like any other and refreshes the
+detail sheet). A drawing change, and every release bump, refreshes the
 README's copy in `docs/images/` (unversioned names), alt text included.
 
 - No view hand-tunes `set_xlim`/`set_ylim`. Most call `ax.autoscale_view()`

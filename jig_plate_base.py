@@ -17,6 +17,8 @@ out pockets that avoid them. File I/O, diagrams, and the CLI stay in
 `jig-plate.py`.
 """
 import dataclasses
+import math
+import numbers
 
 import numpy as np
 import trimesh
@@ -121,6 +123,33 @@ def _unsupported_label_chars(text):
     return [ch for ch in dict.fromkeys(text) if seen[ch]]
 
 
+def _text_width(text, size):
+    """Width in mm of `text` set `size` mm tall in the label font: a linear
+    measurement that renders no outlines, so it is cheap for any length."""
+    from matplotlib.textpath import text_to_path as _t2p
+    fp = _label_font_properties()
+    w, _h, _d = _t2p.get_text_width_height_descent(text, fp, ismath=False)
+    return w * size / fp.get_size_in_points()
+
+
+def _inked_span(text):
+    """`text` without its leading and trailing characters that render no
+    outline (spaces, no-break and other fixed-width spaces, U+2800, the
+    zero-width characters): they have an advance but no ink, and the
+    deboss footprint is measured from the ink. Whether a character has ink
+    is decided with _text_polys itself, once per distinct character, so
+    this can never keep less than the exact check measures."""
+    inked = {}
+    for ch in set(text):
+        inked[ch] = bool(_text_polys(ch, 4.0, 0, 0))
+    first = next((i for i, ch in enumerate(text) if inked[ch]), None)
+    if first is None:
+        return ""
+    last = max(i for i in range(len(text) - 1, first - 1, -1)
+               if inked[text[i]])
+    return text[first:last + 1]
+
+
 def _text_polys(text, size, x0, y0):
     """Shapely polygons for extrudable text at (x0, y0) baseline."""
     from matplotlib.textpath import text_to_path as _t2p
@@ -223,6 +252,22 @@ def _add_deboss_right(poly_list, target, plate_x, plate_y, deboss_d):
             target.append(m)
 
 
+def _is_bool(value):
+    """True for `bool` and `np.bool_` (which is not a `bool` subclass).
+
+    numpy does not register `np.bool_` as a `numbers.Real`, so the number
+    checks reject it anyway; it is named here so that stays true if that changes.
+    """
+    return isinstance(value, (bool, np.bool_))
+
+
+def _native(value):
+    """A plain Python `int` or `float`; builtin ints and floats pass through."""
+    if type(value) in (int, float):
+        return value
+    return float(value)
+
+
 def build_plate(
     *,
     plate_x=246.0, plate_y=218.0, plate_z=9.0,
@@ -262,11 +307,13 @@ def build_plate(
 
     `side_branding` (default True) debosses the logo and label on the left
     and right faces as well as the top face. Those side marks are a fixed
-    4 mm tall, so they need a `plate_z` of roughly 7.4 mm or more; pass
-    `side_branding=False` for a thinner plate. With False, the left and
-    right faces stay flat, and there is no side-face Z-fit check or
-    side-face keep-out box. The top-face branding is unaffected. A
-    non-bool value raises `ValueError`.
+    size (a 4 mm label beside a taller logo, about 5.8 mm in all), so they
+    need a `plate_z` of roughly 7.4 mm or more; below that pass
+    `side_branding=False` (the default 6.1 mm bores need about 7.7 mm, so
+    a thinner plate also needs a smaller `mag_d`/`mag_depth`). With False,
+    the left and right faces stay flat, and there is no side-face Z-fit
+    check or side-face keep-out box. The top-face branding is unaffected.
+    A non-bool value raises `ValueError`.
 
     Returns a `PlateResult` (`.solid`: trimesh.Trimesh, `.geometry`:
     PlateGeometry). Pure -- no file I/O, no argv, no printing.
@@ -303,12 +350,31 @@ def build_plate(
         ("stack_inset_x", stack_inset_x), ("stack_inset_y", stack_inset_y),
         ("deboss_d", deboss_d),
     ):
-        if isinstance(_value, bool) or not isinstance(_value, (int, float)):
+        if _is_bool(_value) or not isinstance(_value, numbers.Real):
             raise ValueError(f"{_name} must be a number, got {_value!r}")
-        if not np.isfinite(_value):
-            raise ValueError(f"{_name} must be finite, got {_value!r}")
-    if isinstance(mag_count_x, bool) or not isinstance(mag_count_x, int):
+        # math.isfinite, not np.isfinite: it accepts any int, and raises
+        # OverflowError for one too large for a float (10**400), which
+        # must be a ValueError naming the parameter like any other bad value
+        try:
+            _finite = math.isfinite(_value)
+        except OverflowError:
+            _finite = False
+        if not _finite:
+            raise ValueError(
+                f"{_name} must be finite, got {_value!r:.40}")
+    if _is_bool(mag_count_x) or not isinstance(mag_count_x, numbers.Integral):
         raise ValueError(f"mag_count_x must be an int, got {mag_count_x!r}")
+    # numpy scalars (np.float32, np.int64) pass the checks above; hand the
+    # geometry plain Python numbers so float32 arithmetic can't leak in
+    (plate_x, plate_y, plate_z, mag_d, mag_depth, mag_inset_x,
+     bottom_mag_inset_x, front_margin, back_margin, stack_w, stack_len,
+     stack_h, stack_play, stack_inset_x, stack_inset_y, deboss_d) = (
+        _native(v) for v in (
+            plate_x, plate_y, plate_z, mag_d, mag_depth, mag_inset_x,
+            bottom_mag_inset_x, front_margin, back_margin, stack_w,
+            stack_len, stack_h, stack_play, stack_inset_x, stack_inset_y,
+            deboss_d))
+    mag_count_x = int(mag_count_x)
 
     if plate_x <= 0 or plate_y <= 0 or plate_z <= 0:
         raise ValueError(
@@ -353,6 +419,16 @@ def build_plate(
             "couldn't stack -- and at 0 it is a press fit that won't seat "
             "on FDM prints"
         )
+    # the bores and ribs are laid out from each side toward the middle, so
+    # an inset at or past half the plate crosses them over (descending
+    # positions) or stacks them on one spot
+    for _name, _value in (("mag_inset_x", mag_inset_x),
+                          ("stack_inset_x", stack_inset_x)):
+        if _value >= plate_x / 2:
+            raise ValueError(
+                f"{_name} ({_value}) must be less than half of plate_x "
+                f"({plate_x / 2})"
+            )
     if plate_x > 246.0:
         raise ValueError(
             f"plate_x ({plate_x}) exceeds 246 mm (bed width + purge-area "
@@ -375,6 +451,23 @@ def build_plate(
     # plate; neither was checked before) ----
     _front_cy = front_margin / 2
 
+    # Cheap length check before any glyph is rendered and nested (that is
+    # quadratic in the glyph count, so a very long label stalled for
+    # seconds before the width check below rejected it). It rejects only a
+    # label whose inked part is wider than plate_x itself, while branding
+    # needs the text plus 9 mm of logo and gap to fit, so it can never
+    # reject a label that builds; the exact check below stays.
+    # measured over the inked span only: leading/trailing characters with
+    # no outline cost nothing in the exact check below
+    _est_w = _text_width(_inked_span(label), 4.0)
+    _shown = label if len(label) <= 40 else label[:40] + "..."
+    if _est_w > plate_x:
+        raise ValueError(
+            f"branding (logo + label {_shown!r}) is far wider than "
+            f"plate_x ({plate_x}): the inked part of the label is {_est_w:.0f} mm "
+            "wide -- shorten the label or enlarge the plate"
+        )
+
     _tp0 = _text_polys(label, 4.0, 0, 0)
     if not _tp0:
         raise ValueError(
@@ -391,12 +484,14 @@ def build_plate(
     _sx_left = (plate_y - _total) / 2
 
     # Kept although the feature-box checks below also reject an
-    # over-wide branding: this message names the label and both limits.
-    if _total > plate_y or _total > plate_x:
+    # over-wide branding: this message names the label and the limits.
+    # plate_y bounds it only when the side faces carry it too.
+    if _total > plate_x or (side_branding and _total > plate_y):
+        _limits = (f"plate_x ({plate_x})" if not side_branding else
+                   f"plate_y ({plate_y}) or plate_x ({plate_x})")
         raise ValueError(
             f"branding (logo + label {label!r}) is {_total:.1f} mm wide, "
-            f"wider than plate_y ({plate_y}) or plate_x ({plate_x}) -- "
-            "shorten the label or enlarge the plate"
+            f"wider than {_limits} -- shorten the label or enlarge the plate"
         )
 
     # each face's actual logo+text polygons, computed once and reused
