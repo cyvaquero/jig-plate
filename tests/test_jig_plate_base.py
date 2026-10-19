@@ -240,8 +240,7 @@ class TestParameterValidation:
     silently broken/nonsensical plate that still reports
     watertight: True). See the `Changelog` block in jig-plate.py's
     module docstring for what each looked like before the check existed;
-    CHANGELOG.md has its own entry for each iterative change from 3.0.1
-    on, and summarizes the earlier ones in their release's section.
+    CHANGELOG.md summarizes them in each release's section.
 
     Every case below matches on the actual error message, not just
     "some ValueError" -- a bare pytest.raises(ValueError) passes no
