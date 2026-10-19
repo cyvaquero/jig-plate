@@ -26,14 +26,11 @@ _spec.loader.exec_module(jig_plate_cli)
 
 
 class TestStamp:
-    def test_pads_a_short_header_to_80_bytes_and_keeps_the_body_intact(self, tmp_path):
-        path = tmp_path / "short.stl"
+    def test_pads_a_short_header_to_80_bytes_and_keeps_the_body_intact(self):
         body = b"body-bytes-that-must-not-move"
-        path.write_bytes(b"\x00" * 80 + body)
 
-        jig_plate_cli.stamp(path, "Jig plate 3.0.0")
+        data = jig_plate_cli.stamp(b"\x00" * 80 + body, "Jig plate 3.0.0")
 
-        data = path.read_bytes()
         assert len(data) == 80 + len(body)
         header = data[:80]
         assert header[: len(b"Jig plate 3.0.0")] == b"Jig plate 3.0.0"
@@ -42,22 +39,77 @@ class TestStamp:
         )
         assert data[80:] == body
 
-    def test_truncates_a_header_over_80_bytes_without_shifting_the_body(self, tmp_path):
+    def test_truncates_a_header_over_80_bytes_without_shifting_the_body(self):
         # the 2.4.10 fix: `.encode()[:80]` before `.ljust(80, ...)` --
         # without the [:80] slice, a >= 80 byte string assigned into
         # b[0:80] grows the bytearray instead of truncating, shifting
         # every later byte of the binary STL body and corrupting it.
-        path = tmp_path / "long.stl"
         body = b"BODY-MUST-STAY-RIGHT-HERE"
-        path.write_bytes(b"\x00" * 80 + body)
-        long_header = "x" * 200
 
-        jig_plate_cli.stamp(path, long_header)
+        data = jig_plate_cli.stamp(b"\x00" * 80 + body, "x" * 200)
 
-        data = path.read_bytes()
         assert len(data) == 80 + len(body), "body shifted -- file corrupted"
         assert data[:80] == b"x" * 80
         assert data[80:] == body
+
+
+class TestWriteAtomic:
+    def test_writes_bytes_to_a_new_path(self, tmp_path):
+        target = tmp_path / "new.bin"
+        jig_plate_cli.write_atomic(target, b"abc")
+        assert target.read_bytes() == b"abc"
+        assert [p.name for p in tmp_path.iterdir()] == ["new.bin"]
+
+    def test_replaces_a_symlink_instead_of_following_it(self, tmp_path):
+        sentinel = tmp_path / "sentinel.txt"
+        sentinel.write_bytes(b"precious")
+        target = tmp_path / "out.bin"
+        target.symlink_to(sentinel)
+
+        jig_plate_cli.write_atomic(target, b"new")
+
+        assert sentinel.read_bytes() == b"precious"
+        assert not target.is_symlink()
+        assert target.read_bytes() == b"new"
+
+    def test_a_failed_replace_leaves_no_temp_file_and_the_target_alone(
+        self, tmp_path, monkeypatch
+    ):
+        target = tmp_path / "out.bin"
+        target.write_bytes(b"old")
+
+        def _boom(src, dst):
+            raise OSError("replace failed")
+
+        monkeypatch.setattr(jig_plate_cli.os, "replace", _boom)
+        with pytest.raises(OSError, match="replace failed"):
+            jig_plate_cli.write_atomic(target, b"new")
+
+        assert target.read_bytes() == b"old"
+        assert [p.name for p in tmp_path.iterdir()] == ["out.bin"]
+
+    def test_a_failed_write_leaves_no_temp_file(self, tmp_path, monkeypatch):
+        target = tmp_path / "out.bin"
+
+        def _boom(path, mode):
+            raise OSError("chmod failed")
+
+        monkeypatch.setattr(jig_plate_cli.os, "chmod", _boom)
+        with pytest.raises(OSError, match="chmod failed"):
+            jig_plate_cli.write_atomic(target, b"new")
+
+        assert list(tmp_path.iterdir()) == []
+
+    def test_file_mode_follows_the_umask_not_0600(self, tmp_path):
+        import os
+
+        old = os.umask(0o022)
+        try:
+            target = tmp_path / "out.bin"
+            jig_plate_cli.write_atomic(target, b"x")
+        finally:
+            os.umask(old)
+        assert target.stat().st_mode & 0o777 == 0o644
 
 
 class TestMain:
@@ -103,6 +155,24 @@ class TestMain:
         ):
             assert (img_dir / name).exists()
 
+    def test_console_prints_one_labeled_line_per_mesh(
+        self, _redirected_dirs, monkeypatch, capsys
+    ):
+        monkeypatch.setattr(sys, "argv", ["jig-plate.py"])
+
+        jig_plate_cli.main()
+
+        lines = capsys.readouterr().out.splitlines()
+        plate = [ln for ln in lines if ln.startswith("plate ")]
+        coupon = [ln for ln in lines if ln.startswith("stack coupon ")]
+        assert len(plate) == 1 and len(coupon) == 1
+        pattern = (r"^{} +\| watertight: True \| volume cm3: [\d.]+ "
+                   r"\| bbox: \[[\d. ]+\] \| faces: \d+$")
+        assert re.match(pattern.format("plate"), plate[0]), plate[0]
+        assert re.match(pattern.format("stack coupon"), coupon[0]), coupon[0]
+        # both prefixes padded to the same width so the columns line up
+        assert plate[0].index("|") == coupon[0].index("|")
+
     def test_custom_label_is_stamped_and_still_watertight(
         self, _redirected_dirs, monkeypatch
     ):
@@ -141,13 +211,13 @@ class TestMain:
         real_stamp = jig_plate_cli.stamp
         real_prop = trimesh.Trimesh.is_watertight
 
-        def _break_after_booleans(path, text):
+        def _break_after_booleans(data, text):
             # the booleans reject a non-watertight input, so flip the
             # property only once the coupon has been built (its stamp is
             # the last step before main() checks both meshes). The plate
             # is the only mesh over 100 cm3; the coupon is ~8 cm3.
-            real_stamp(path, text)
-            if "stack_coupon" in Path(path).name:
+            out = real_stamp(data, text)
+            if text.startswith("Jig plate") and "stack coupon" in text:
                 monkeypatch.setattr(
                     trimesh.Trimesh, "is_watertight",
                     property(lambda self: (
@@ -155,6 +225,7 @@ class TestMain:
                         else real_prop.fget(self)
                     )),
                 )
+            return out
 
         monkeypatch.setattr(jig_plate_cli, "stamp", _break_after_booleans)
 
@@ -167,3 +238,50 @@ class TestMain:
         version = jig_plate_cli.VERSION
         assert (out_dir / f"jig_plate_{version}.stl").exists()
         assert (out_dir / f"jig_plate_{version}_stack_coupon.stl").exists()
+
+
+class TestMainDoesNotWriteThroughSymlinks:
+    def test_symlinked_outputs_are_replaced_and_their_targets_untouched(
+        self, tmp_path, monkeypatch
+    ):
+        out_dir = tmp_path / "output"
+        img_dir = tmp_path / "images"
+        out_dir.mkdir()
+        img_dir.mkdir()
+        monkeypatch.setattr(jig_plate_cli, "OUT_DIR", out_dir)
+        monkeypatch.setattr(jig_plate_cli, "IMG_DIR", img_dir)
+        monkeypatch.setattr(sys, "argv", ["jig-plate.py"])
+        version = jig_plate_cli.VERSION
+        stl = out_dir / f"jig_plate_{version}.stl"
+        png = img_dir / f"jig_plate_{version}_tech_top.png"
+        sentinel = tmp_path / "sentinel.txt"
+        sentinel.write_bytes(b"do not overwrite me")
+        stl.symlink_to(sentinel)
+        png.symlink_to(sentinel)
+
+        jig_plate_cli.main()
+
+        assert sentinel.read_bytes() == b"do not overwrite me"
+        for path in (stl, png):
+            assert path.exists() and not path.is_symlink()
+        assert stl.read_bytes()[:80].startswith(f"Jig plate {version}".encode())
+        assert png.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
+        import trimesh
+
+        assert trimesh.load(stl).is_watertight
+
+    def test_failure_during_main_leaves_no_temp_files(self, tmp_path, monkeypatch):
+        out_dir = tmp_path / "output"
+        img_dir = tmp_path / "images"
+        monkeypatch.setattr(jig_plate_cli, "OUT_DIR", out_dir)
+        monkeypatch.setattr(jig_plate_cli, "IMG_DIR", img_dir)
+        monkeypatch.setattr(sys, "argv", ["jig-plate.py"])
+
+        def _boom(src, dst):
+            raise OSError("disk full")
+
+        monkeypatch.setattr(jig_plate_cli.os, "replace", _boom)
+        with pytest.raises(OSError, match="disk full"):
+            jig_plate_cli.main()
+
+        assert list(out_dir.iterdir()) == []
