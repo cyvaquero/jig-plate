@@ -790,6 +790,12 @@ Changelog
          label, measured from the left-face deboss vertices) instead of
          "4 mm tall". Verified: STL triangle data (bytes 80+) byte-identical
          to 3.0.11; both meshes watertight; full test suite passes.
+  3.1.0  minor release: folds 3.0.1-3.0.27 (side_branding switch, numpy
+         scalar parameters, labeled CLI lines, atomic output writes, the
+         early label-length check, accessible drawings with feature keys,
+         README drawings). Verified: STL triangle data (bytes 80+)
+         byte-identical to 3.0.0 and 3.0.11; both meshes watertight;
+         full test suite passes (199); drawings viewed.
 """
 import argparse
 import io
@@ -823,7 +829,7 @@ def _solid(color, alpha):
     fg, bg = _to_rgba(color), _to_rgba(BG)
     return tuple(alpha * c + (1 - alpha) * b for c, b in zip(fg[:3], bg[:3])) + (1.0,)
 
-VERSION = "3.0.27"
+VERSION = "3.1.0"
 OUT_DIR = Path(__file__).resolve().parent / "output"
 IMG_DIR = Path(__file__).resolve().parent / "images"
 

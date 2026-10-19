@@ -5,7 +5,7 @@
 | **Generator (CLI)** | `jig-plate.py` |
 | **Generator (library)** | `jig_plate_base.py` (`build_plate()`) |
 | **Meshes** | `jig_plate_<version>.stl` |
-| **Latest release** | 3.0.0 |
+| **Latest release** | 3.1.0 |
 
 ## Versioning
 
@@ -34,371 +34,134 @@ never changes -- it isn't one of the three.
 
 ---
 
-## 3.0.27 — Side branding height stated correctly
+## 3.1.0 — Thin plates, accessible drawings, safer CLI output
 
-Iterative (unreleased). Docs only; the plate and coupon geometry are
-unchanged from 3.0.11 (triangle data byte-identical).
+Minor release. Folds iterative changes 3.0.1–3.0.27 into a versioned
+release: the post-3.0.0 review fixes, an option to leave the side faces
+plain, the drawings in the README, and the fixes from the blind review of
+`release/3.1.0`. The plate and coupon geometry at the defaults are
+unchanged from 3.0.0 (triangle data byte-identical).
 
-### Fixed
-- The README and the `build_plate()` docstring called the left- and
-  right-face branding "a fixed 4 mm tall". 4 mm is the label size; with
-  the logo the side mark is about 5.8 mm tall, which is what sets the
-  7.4 mm minimum `plate_z` (#54).
-
-## 3.0.26 — Thin-plate limits stated correctly
-
-Iterative (unreleased). Docs only; the plate and coupon geometry are
-unchanged from 3.0.11 (triangle data byte-identical).
-
-### Fixed
-- The README and the `build_plate()` docstring no longer suggest that
-  `side_branding=False` alone allows a thinner plate: the default 6.1 mm
-  magnet bores need a `plate_z` of about 7.7 mm, so a plate thinner than
-  that also needs a smaller `mag_d`/`mag_depth` (#54).
-
-## 3.0.25 — CHANGELOG summary table header
-
-Iterative (unreleased). Docs only; the plate and coupon geometry are
-unchanged from 3.0.11 (triangle data byte-identical).
-
-### Fixed
-- The summary table at the top of this file has a real header row
-  (`Item`, `Value`) instead of an empty one, so screen readers no longer
-  announce blank column headers (#60).
-
-## 3.0.24 — numpy scalars accepted as parameters
-
-Iterative (unreleased). Plate and coupon geometry at the defaults are
-unchanged from 3.0.11 (triangle data byte-identical); the drawings are
-unchanged.
-
-### Changed
-- `build_plate()` accepts numpy scalars such as `np.float32` and `np.int64`
-  (and any other `numbers.Real` / `numbers.Integral`) for its dimensions
-  and `mag_count_x`; it used to raise `ValueError` for them. `bool` and
-  `np.bool_` are still rejected, as are non-numbers, and the finite check
-  applies to every accepted type. Values reach the geometry as plain Python
-  numbers, so `build_plate(plate_x=np.float32(246.0), mag_count_x=np.int64(4))`
-  builds the same mesh as `build_plate()` (the last remaining info line of
-  #54).
-
-## 3.0.23 — Output files no longer written through symlinks
-
-Iterative (unreleased). Plate and coupon geometry are unchanged from 3.0.11
-(triangle data byte-identical); the drawings are unchanged.
-
-### Fixed
-- The CLI no longer follows a symlink at an output path: if `output/` or
-  `images/` held a symlink named like one of the generated STLs or PNGs, the
-  file it pointed to was overwritten. Every STL and PNG is now built in
-  memory, written to a temporary file in the same directory and moved onto
-  the target, so a symlink is replaced by a regular file and a failed write
-  leaves no partial or temporary file behind (#53).
-
-## 3.0.22 — Repo rules for drawings and the accessibility review
-
-Iterative (unreleased). Docs only; the plate and coupon geometry are
-unchanged from 3.0.11 (triangle data byte-identical).
-
-### Changed
-- `CLAUDE.md` now says the README's copies of the drawings in
-  `docs/images/` are refreshed at every release bump as well as on a
-  drawing change, and that the drawing code and CLI output count as text
-  shown to readers, so a change to either calls for the accessibility
-  reviewer.
-
-## 3.0.21 — Low-severity review fixes
-
-Iterative (unreleased). Plate and coupon geometry at the defaults are
-unchanged from 3.0.11 (triangle data byte-identical).
-
-### Changed
-- The CLI prints one labeled line per mesh: `plate | watertight: True |
-  volume cm3: ... | bbox: ... | faces: ...` and the same for `stack coupon`
-  (it used to print `stack coupon: True 8.09 cm3 [...]`) (#54).
-- All four drawings use at least 7 pt for every label, the front elevation
-  is a narrower figure so its labels read larger at README width, the 4 mm
-  rib-inset dimension no longer collapses into a bowtie, the front
-  elevation's 4.5 bore-height dimension sits outside the plate so its label
-  touches no outline, the key swatches have an outline, and the violet
-  extension lines on the top plan are no longer faded. The feature keys
-  under the top plan and front elevation are anchored to the drawing, so
-  the shorter front elevation no longer cuts off the bottom of its key
+### Added
+- `build_plate(side_branding=True)`: pass `False` to leave the left and
+  right faces plain. The side mark is a fixed size (a 4 mm label beside a
+  taller logo, about 5.8 mm in all) and needs a `plate_z` of about 7.4 mm;
+  the default 6.1 mm magnet bores need about 7.7 mm, so a thinner plate
+  also needs a smaller `mag_d`/`mag_depth`. With `False` the label only has
+  to fit `plate_x`. The top-face branding is unchanged, a non-bool value
+  raises `ValueError`, and the CLI has no flag for it (#7, #54).
+- `PlateGeometry.top_branding_bounds`, the top-face branding footprint;
+  `front_margin`/`back_margin` are documented, and `back_margin` is kept
+  for pocket-layout scripts that need the back band (#28).
+- The README shows the isometric diagram and the three technical drawings,
+  each with a text alternative giving its dimensions and linked to its
+  full-size file. Copies live in `docs/images/` under unversioned names
   (#54).
-- Each README image links to its full-size file, and the Dimensions table
-  has real column headers (#54).
+- `requirements.lock`, a pinned and hashed lock of every dependency; the
+  documented setup installs from it with `--require-hashes` on Python 3.14,
+  so a fresh venv reproduces the same meshes (#16).
+
+### Changed
+- The CLI prints one labeled line per mesh, `plate | watertight: True |
+  volume cm3: ... | bbox: ... | faces: ...` and the same for
+  `stack coupon` (it used to print `stack coupon: True 8.09 cm3 [...]`)
+  (#54).
+- `build_plate()` accepts numpy scalars such as `np.float32` and `np.int64`
+  (any `numbers.Real`, and any `numbers.Integral` for `mag_count_x`);
+  `bool`, `np.bool_` and non-numbers are still rejected, and values reach
+  the geometry as plain Python numbers, so
+  `build_plate(plate_x=np.float32(246.0), mag_count_x=np.int64(4))` builds
+  the same mesh as `build_plate()` (#54).
+- `pytest` and `rtree` are a `test` extra in `pyproject.toml` rather than
+  runtime dependencies (#28).
+- Drawings: every label is at least 7 pt, and the front elevation is a
+  narrower figure so its labels read larger at README width (#54).
+- The 3.0.0 notes below now list every change that can break a script
+  written against 2.4.0 and match the test record, and code comments,
+  docstrings and the README use American spelling (#22, #23, #26).
 
 ### Fixed
-- With `side_branding=False`, a label is no longer limited by `plate_y`; it
-  only has to fit `plate_x` (#54).
-- A parameter too large for a float (`plate_x=10**400`) raises `ValueError`
-  naming it, not `TypeError` (#54).
-- `mag_inset_x` or `stack_inset_x` of half the plate or more raises
-  `ValueError` instead of returning bore or rib positions in descending
-  order (#54).
+- `jig-plate.py` still writes both STLs when a mesh is not watertight, so
+  it can be inspected, but prints an error naming the mesh to stderr and
+  exits 1 instead of 0 (#28).
+- `build_plate()` raises a `ValueError` naming the parameter and its
+  minimum for features too small to print, instead of returning a
+  "watertight" plate silently missing its rib, bores or branding:
+  `mag_d`, `mag_depth`, `stack_w`, `stack_len` and `stack_h` must be
+  >= 0.8 mm, `deboss_d` >= 0.2 mm and `stack_play` >= 0.1 mm (#6).
+- `build_plate()` input edge cases: a parameter too large for a float
+  (`plate_x=10**400`) raises `ValueError` naming it, not `TypeError`;
+  `mag_inset_x` or `stack_inset_x` of half the plate or more raises
+  instead of returning bore or rib positions in descending order (#54).
+- `pip install .`, `pip install -e .` and `pip install ".[test]"` work:
+  `pyproject.toml` gains a `[build-system]` table and an explicit
+  `py-modules = ["jig_plate_base"]` (#35).
+- Technical drawings no longer rely on color: the top plan and front
+  elevation each have a key under the drawing, hidden magnet bores are
+  dotted and hidden grooves dashed, and each key swatch is drawn in its
+  feature's line style and shape (#51).
+- Drawing labels that were 2.9 to 3.6:1 against their background now reach
+  at least 4.5:1; key swatches are outlined and the top plan's extension
+  lines are no longer faded (#50, #54).
+- The top plan shows the debossed branding footprint; the front elevation
+  shows the hidden bottom bores and grooves; the isometric diagram states
+  its ×3 vertical exaggeration, keeps its labels off the part and has no
+  crossing leaders; the 0.2 mm clearance, 4 mm rib-inset and 4.5 mm
+  bore-height dimensions no longer collide with their arrowheads or
+  outlines (#28, #36, #54).
+- The isometric diagram's corner stacking rib, a few pixels at full scale,
+  gets a dashed callout frame and a "Detail A, ×6" inset (#37).
+- The README's Dimensions table and this file's summary table have real
+  header rows instead of empty ones (#54, #60).
 
-## 3.0.20 — Over-long labels are rejected at once
-
-Iterative (unreleased). Plate and coupon geometry at the defaults are
-unchanged from 3.0.11 (triangle data byte-identical).
-
-### Fixed
-- `build_plate()` now measures the label's width before rendering its
-  glyphs and raises the same `ValueError` immediately for a label whose
-  inked part is wider than the plate (spaces and other characters with no
-  outline at the start or end of the label don't count, as before). A
-  6,000-character label took about 5.5 s to be rejected; it now takes about
+### Security
+- The CLI no longer writes through a symlink at an output path: every STL
+  and PNG is built in memory, written to a temporary file in the same
+  directory and moved onto the target, so a symlink is replaced instead of
+  followed and a failed write leaves no partial or temporary file (#53).
+- An over-long label is rejected before its glyphs are rendered: a
+  6,000-character label took about 5.5 s to reject and now takes about
   0.14 s. Every label that built before still builds (#52).
 
-## 3.0.19 — Feature keys on the top plan and front elevation
+### Test suite
 
-Iterative (unreleased). Plate and coupon geometry at the defaults are
-unchanged from 3.0.11 (triangle data byte-identical).
+Grew from 86 tests at 3.0.0 to 199. New tests cover the drawings (label
+size and contrast, feature keys, margins), parameter edge cases, label
+length, atomic writes and packaging. The `$` label test checks the
+rendered glyphs instead of only watertightness (#1); the four
+text-orientation tests scan only the debossed area, so the suite runs in
+about 6 s instead of 13-14 s (#48); and the validation tests' docstring
+describes this file correctly (#30).
 
-### Fixed
-- The top plan and the front elevation each have a key under the drawing
-  that names the stacking groove, the mounting-magnet bore, the edge
-  magnet bores and the stacking rib. Hidden magnet bores are now dotted
-  and hidden grooves dashed on both sheets, and each key swatch is drawn
-  in the same line style and shape as its feature, so the features can be
-  told apart without relying on color. The README descriptions of both
-  images say which hidden feature is which (#51).
+### Result
 
-## 3.0.18 — Readable label colors on the technical drawings
+**481.5 cm³, bounding box 246 × 218 × 10.5 mm, 6806 faces — unchanged from
+3.0.0.** Stack coupon unchanged at 8.09 cm³, 46 × 20 × 10.5 mm. Verified
+watertight (plate and coupon); triangle data (bytes 80 onward) of both STLs
+byte-identical to 3.0.0.
 
-Iterative (unreleased). Plate and coupon geometry at the defaults are
-unchanged from 3.0.11 (triangle data byte-identical).
+### Validation
 
-### Fixed
-- The "61.5 typ." label on the top plan, the "magnet 6×3" label and the
-  "rib (top face)" label on the detail sheet are now dark enough to read
-  (at least 4.5:1 contrast; they were 2.9 to 3.6:1). The violet and amber
-  lines and fills are unchanged (#50).
+The 1.7 mm stacking groove passed a test print.
 
-## 3.0.17 — Faster text-orientation tests
+### Files
 
-Iterative (unreleased). Tests only; the plate and coupon geometry are
-unchanged from 3.0.11 (triangle data byte-identical).
+- `jig-plate.py`
+- `jig_plate_base.py`
+- `tests/`
+- `README.md`
+- `CLAUDE.md`
+- `CHANGELOG.md`
+- `pyproject.toml`
+- `requirements.lock`
+- `docs/images/`
 
-### Changed
-- The four tests that check the debossed logo and label read the right way
-  round scan only the area the deboss covers, found from the mesh's own
-  cut floor, instead of the whole face. The full test suite runs in about
-  6 s instead of 13-14 s, and each test still fails when its face's text
-  is mirrored (#48).
+### Generated Files
 
-## 3.0.16 — Optional side-face branding for thin plates
+- `jig_plate_3.1.0.stl`
+- `jig_plate_3.1.0_stack_coupon.stl`
 
-Iterative (unreleased). Plate and coupon geometry at the defaults are
-unchanged from 3.0.11 (triangle data byte-identical).
-
-### Added
-- `build_plate(side_branding=True)` (#7): pass `False` to leave the left and
-  right faces plain. The side marks are a fixed 4 mm tall, so they forced
-  `plate_z` to about 7.4 mm or more even when nothing mechanical needed it;
-  with `side_branding=False` a thinner plate such as `plate_z=7` builds. The
-  top-face branding is unchanged, and a non-bool value raises `ValueError`.
-  The CLI has no flag for it and is unchanged.
-
-## 3.0.15 — Test docstring describes the CHANGELOG correctly
-
-Iterative (unreleased). Test docstring only; the plate and coupon geometry
-are unchanged from 3.0.11 (triangle data byte-identical).
-
-### Fixed
-- The parameter-validation tests' docstring no longer says this file
-  records only major and minor releases; it has an entry for every
-  iterative change from 3.0.1 on (#30).
-
-## 3.0.14 — American spelling
-
-Iterative (unreleased). Spelling only; the plate and coupon geometry are
-unchanged from 3.0.11 (triangle data byte-identical).
-
-### Fixed
-- Code comments, docstrings, test comments and names, and the README use
-  American spelling, the repo's convention: center, centered, centerline,
-  labeled, neighbor. No drawing text changed. Historical entries in this
-  file keep their original wording (#26).
-
-## 3.0.13 — 3.0.0 release notes list every breaking change
-
-Iterative (unreleased). Documentation only; the plate and coupon geometry
-are unchanged from 3.0.11 (triangle data byte-identical).
-
-### Fixed
-- The 3.0.0 notes now list the changes there that can break a script
-  written against 2.4.0, which they had left out: `PlateGeometry` lost its
-  `honeycomb_*` fields, `mag_xs` and `bottom_mag_ys` became tuples, and a
-  rejected `--label` exits 2 with a usage message instead of a traceback
-  (#23).
-
-## 3.0.12 — 3.0.0 release notes match the test record
-
-Iterative (unreleased). Documentation only; the plate and coupon geometry
-are unchanged from 3.0.11 (triangle data byte-identical).
-
-### Fixed
-- The 3.0.0 notes (this file and the generator docstring) no longer claim
-  every test was mutation-tested: many were, as each iterative entry notes,
-  and the gaps later review found were closed in 3.0.3 and 3.0.6. The
-  review rounds are given as 2.4.6–2.4.12, and the test history now says
-  the first 32 tests came with 2.4.4. The 2.4.12 entry's "fails exactly the
-  5 tests" was true then (rerun: 5 fail at 2.4.12) and now adds that the
-  same mutation fails 4 at 3.0.0 (#22).
-
-## 3.0.11 — Drawings in the README
-
-Iterative (unreleased). Documentation only; the plate and coupon geometry
-are unchanged from 3.0.10 (triangle data byte-identical).
-
-### Added
-- The README shows the isometric diagram and the three technical drawings
-  (top plan, front elevation, detail sheet), each with a text alternative
-  giving its dimensions. Copies live in `docs/images/` under unversioned
-  names and are refreshed whenever a drawing changes.
-
-## 3.0.10 — Corner stacking rib visible in the isometric diagram
-
-Iterative (unreleased). Drawing only; the plate and coupon geometry are
-unchanged from 3.0.7 (triangle data byte-identical).
-
-### Fixed
-- The isometric diagram's corner stacking rib was a few pixels, hidden
-  under its leader's dot. The callout now points at a dashed frame around
-  the rib, and a "Detail A, ×6" inset shows the corner enlarged six times
-  (rib 6 × 1.5 mm, 1.5 mm tall; labeled, outlined and shaded so it does not
-  rely on color) (#37).
-
-## 3.0.9 — Isometric diagram leaders no longer cross
-
-Iterative (unreleased). Drawing only; the plate and coupon geometry are
-unchanged from 3.0.7 (triangle data byte-identical).
-
-### Fixed
-- In the isometric diagram, the "Magnet bore" leader no longer crosses the
-  "Back edge (magnets, mirrored on the front)" leader; the Back edge leader
-  is now anchored left of the bore and runs under it (#36).
-
-## 3.0.8 — pyproject.toml is installable
-
-Iterative (unreleased). Packaging only; the plate and coupon geometry are
-unchanged from 3.0.7 (triangle data byte-identical).
-
-### Fixed
-- `pip install .`, `pip install -e .` and `pip install ".[test]"` now work.
-  `pyproject.toml` gains a `[build-system]` table (setuptools 61 or newer,
-  the first with `[project]` support) and an explicit
-  `[tool.setuptools] py-modules = ["jig_plate_base"]`; before, setuptools
-  found the generated `images/` and `output/` folders and refused to build
-  (#35). Other generators can now depend on the library by version.
-
-## 3.0.7 — Tag format left to the global rules
-
-Iterative (unreleased). Documentation only; the plate and coupon geometry
-are unchanged from 3.0.6 (triangle data byte-identical).
-
-### Changed
-- `CLAUDE.md` no longer restates the release-tag format, so hotfix tags
-  (`x.y.z.h`) aren't contradicted; the global rules set it. It still notes
-  that tags up to `v3.0.0` keep their `v` prefix.
-
-## 3.0.6 — Review notes from 3.0.0
-
-Iterative (unreleased). The plate and coupon geometry are unchanged from
-3.0.1 (triangle data byte-identical).
-
-### Fixed
-- `jig-plate.py` still writes both STLs when a mesh is not watertight (so
-  it can be inspected) but now prints an error naming the mesh to stderr
-  and exits with status 1 instead of 0 (#28).
-- The top plan drawing now shows the debossed branding footprint; the
-  front elevation shows the hidden bottom bores and stacking grooves
-  dashed; the isometric diagram states its x3 vertical exaggeration and
-  its "Bottom" and "Magnet bore" labels no longer sit on the part; the
-  0.2 mm clearance dimension on the detail sheet puts its arrowheads
-  outside the extension lines so they no longer collide (#28).
-
-### Changed
-- `PlateGeometry` gains `top_branding_bounds` (the top-face branding
-  footprint) and documents `front_margin`/`back_margin`; `back_margin` is
-  kept for pocket-layout scripts that need the back band (#28).
-- `pytest` and `rtree` are now a `test` extra in `pyproject.toml` rather
-  than runtime dependencies; `requirements.txt` and `requirements.lock`
-  are unchanged (#28).
-- The detail sheet's magnet size comes from constants instead of a local
-  shadowing `geom.mag_depth`; `stamp()` uses `Path` I/O; `.gitignore` no
-  longer ignores `*.stl` everywhere; `build_plate()`'s docstring points
-  at records that exist; comments explain why two validation checks are
-  kept alongside the feature-box check (#28).
-- Tests: the default `mag_xs` are pinned to literals and probed on the
-  mesh, the left-face branding collision box has its own case, and a
-  stale comment and a one-line helper are gone (#28).
-
-## 3.0.5 — Pinned, hashed dependency lock
-
-Iterative (unreleased). Packaging and docs only; the plate and coupon
-geometry are unchanged from 3.0.1 (triangle data byte-identical).
-
-### Changed
-- Added `requirements.lock`, a pinned and hashed lock of every dependency
-  (generated with `pip-compile --generate-hashes` from the loose
-  `requirements.txt`). The documented setup installs from it with
-  `--require-hashes`, so a fresh venv reproduces the same meshes instead
-  of picking up whatever versions are current (#16).
-- The setup steps in the README and `CLAUDE.md` use `python3.14` and the
-  lock; the README explains how to regenerate it.
-
-## 3.0.4 — Minimum printable feature sizes
-
-Iterative (unreleased). Input validation only; the default plate and
-coupon geometry are unchanged from 3.0.1 (triangle data byte-identical).
-
-### Fixed
-- `build_plate()` now raises a `ValueError` naming the parameter and its
-  minimum for feature sizes too small to print, instead of returning a
-  "watertight" plate silently lacking its rib, bores or branding:
-  `mag_d`, `mag_depth`, `stack_w`, `stack_len` and `stack_h` must be
-  >= 0.8 mm, `deboss_d` >= 0.2 mm, and `stack_play` >= 0.1 mm (0 is a
-  press fit that won't seat on FDM prints) (#6).
-
-## 3.0.3 — Dollar-sign label test asserts on the rendered glyphs
-
-Iterative (unreleased). Test only; the plate and coupon geometry are
-unchanged from 3.0.1 (triangle data byte-identical).
-
-### Fixed
-- The label test for `$` characters now checks the rendered glyphs
-  (a literal `$` glyph exists, and "Save $5 and $6" is wider and has
-  more ink than "Save 5 and 6") instead of only watertightness, so a
-  regression to mathtext parsing makes the suite fail (#1).
-
-## 3.0.1 — Working rules aligned with account policy
-
-Iterative (unreleased). Documentation and process only; the plate and
-coupon geometry are unchanged from 3.0.0 (triangle data byte-identical).
-
-### Changed
-- Every merged branch now bumps the iterative version and gets an entry
-  in this file. Until now, only model changes bumped the version and only
-  releases were recorded here.
-- Development uses `feature/`/`bugfix/` branches with PRs into `develop`,
-  and commits use the GitHub no-reply identity.
-- American English is the spelling convention; the remaining British
-  spellings are tracked in #26.
-- `CLAUDE.md` now documents the verified output formats and the
-  byte-for-byte regression check.
-- A major or minor release keeps its iterative version through the release
-  branch; it becomes `X.Y.0` only at the merge into `main`, when the
-  iterative entries it covers are squashed into that release's section.
-- Release tags from now on are bare version numbers (`3.0.1`, not
-  `v3.0.1`); existing tags through `v3.0.0` keep their prefix.
-- `CLAUDE.md` holds only what is specific to this repo (the global rules
-  and the `release` and `blind-review` skills cover the rest), stays under
-  120 lines, notes that PRs into `develop` don't auto-close issues, sets
-  the accessibility scope of a blind review for this UI-less repo, and
-  correctly describes the coupon's watertight line (`stack coupon: True`,
-  not `watertight: True`).
+---
 
 ## 3.0.0 — Lightening cutout reverted; derived-geometry validation
 
