@@ -21,16 +21,12 @@ BBOX = (246.0, 218.0, 10.5)
 TOL = 1.0  # mm3, generous enough for boolean-engine tessellation noise
 
 
-def _volume(result):
-    return result.solid.volume
-
-
 def _cavity_center_x(solid, y, z, near_x):
-    """X centre of the cavity bracketing `near_x`, measured on the mesh
+    """X center of the cavity bracketing `near_x`, measured on the mesh
     by ray-casting along +X at a fixed (y, z) and finding the pair of
     solid/cavity crossings nearest `near_x`. Precise (not a radius-wide
     contains() probe), so a several-mm shift in the real cut is caught
-    even though a naive centre-point probe would still land inside it."""
+    even though a naive center-point probe would still land inside it."""
     origin = [[-1.0, y, z]]
     direction = [[1.0, 0.0, 0.0]]
     locs, _, _ = solid.ray.intersects_location(origin, direction)
@@ -68,6 +64,31 @@ def _split_by_largest_gap(points, split_axis, expected_gap=None):
     return cluster1, cluster2
 
 
+def _deboss_scan_grid(solid, floor_axis, floor_at, probe_at, step=0.3,
+                      pad=1.0):
+    """Grid of probe points covering every debossed cavity on one face,
+    at `probe_at` along `floor_axis` (0=x, 1=y, 2=z). The window is the
+    bounding box, padded by `pad`, of the mesh's own vertices on the
+    deboss floor plane (`floor_axis` == `floor_at`) -- read off the
+    solid, not the PlateGeometry record, so a cut landing somewhere
+    unexpected still widens the window to include it. Scanning the whole
+    face instead costs seconds of contains() per test for the same
+    clusters."""
+    v = solid.vertices
+    floor = v[np.abs(v[:, floor_axis] - floor_at) < 1e-4]
+    assert len(floor), f"no deboss floor vertices at axis {floor_axis} = {floor_at}"
+    a, b = (ax for ax in range(3) if ax != floor_axis)
+    ra = np.arange(floor[:, a].min() - pad, floor[:, a].max() + pad, step)
+    rb = np.arange(floor[:, b].min() - pad, floor[:, b].max() + pad, step)
+    pts = []
+    for ca in ra:
+        for cb in rb:
+            p = [0.0, 0.0, 0.0]
+            p[floor_axis], p[a], p[b] = probe_at, ca, cb
+            pts.append(tuple(p))
+    return pts
+
+
 def _debossed_cavity_clusters(solid, points, split_axis):
     """Scan `points` for debossed cavities (not solid.contains()) and
     split them into two clusters at the largest gap along `split_axis`
@@ -87,7 +108,7 @@ class TestDefaultPlate:
         assert build_plate().solid.is_watertight
 
     def test_volume(self):
-        assert _volume(build_plate()) == pytest.approx(DEFAULT_VOLUME_MM3, abs=TOL)
+        assert build_plate().solid.volume == pytest.approx(DEFAULT_VOLUME_MM3, abs=TOL)
 
     def test_bounding_box(self):
         # also the CLAUDE.md constraint that plate_x <= 246 mm (bed width
@@ -144,10 +165,73 @@ class TestLabel:
         # by default, which silently dropped characters ("Save $5 and
         # $6" -> "Save 5and6"); ismath is now forced off in _text_polys.
         assert build_plate(label="Save $5 and $6").solid.is_watertight
+        # Watertightness is true for both renderings, so assert on the
+        # glyphs themselves: a literal "$" is a real glyph, and the label
+        # keeps both "$" glyphs (more ink and a wider run than the same
+        # text without them, which is what mathtext would have produced).
+        from jig_plate_base import _text_polys
+        assert _text_polys("$", 10, 0, 0)
+        with_d = _text_polys("Save $5 and $6", 10, 0, 0)
+        without = _text_polys("Save 5 and 6", 10, 0, 0)
+        area = lambda ps: sum(p.area for p in ps)
+        width = lambda ps: max(p.bounds[2] for p in ps) - min(p.bounds[0] for p in ps)
+        assert area(with_d) > area(without)
+        assert width(with_d) > width(without)
 
     def test_label_with_dollar_and_backslash_does_not_crash(self):
         # previously crashed as invalid mathtext syntax
         assert build_plate(label=r"$\foo$").solid.is_watertight
+
+
+class TestSideBranding:
+    THIN = dict(plate_z=7, mag_d=4.1, mag_depth=2.2)
+
+    def test_thin_plate_rejected_by_default(self):
+        with pytest.raises(ValueError, match="left-face branding"):
+            build_plate(**self.THIN)
+
+    def test_thin_plate_builds_without_side_branding(self):
+        assert build_plate(side_branding=False, **self.THIN).solid.is_watertight
+
+    def test_explicit_true_matches_default(self):
+        a = build_plate().solid
+        b = build_plate(side_branding=True).solid
+        assert a.volume == b.volume
+        assert (a.vertices == b.vertices).all()
+
+    def test_false_leaves_side_faces_flat(self):
+        on = build_plate().solid
+        off = build_plate(side_branding=False).solid
+        assert off.is_watertight
+        assert off.volume > on.volume
+        # deboss floors lie at x = deboss_d (left) and plate_x - deboss_d
+        # (right); no vertex there when the side faces are flat
+        d, px = 0.3, 246.0
+        def floor(m):
+            return (abs(m.vertices[:, 0] - d) < 1e-6) | (
+                abs(m.vertices[:, 0] - (px - d)) < 1e-6)
+        assert floor(on).any()
+        assert not floor(off).any()
+
+    def test_false_keeps_top_branding(self):
+        on = build_plate()
+        off = build_plate(side_branding=False)
+        top = on.geometry.top_branding_bounds
+        assert off.geometry.top_branding_bounds == top
+        x0, y0, x1, y1 = top
+        # deboss floor vertices at z = plate_z - deboss_d inside the footprint
+        xs = off.solid.vertices
+        assert ((abs(xs[:, 2] - (9.0 - 0.3)) < 1e-6)
+                & (xs[:, 0] > x0) & (xs[:, 0] < x1)).any()
+
+    def test_false_skips_side_z_fit_check(self):
+        build_plate(plate_z=4.0, mag_d=2.0, mag_depth=1.0,
+                    side_branding=False)
+
+    @pytest.mark.parametrize("bad", [1, 0, "yes", None, 1.0])
+    def test_non_bool_rejected(self, bad):
+        with pytest.raises(ValueError, match="side_branding must be a bool"):
+            build_plate(side_branding=bad)
 
 
 class TestParameterValidation:
@@ -155,9 +239,8 @@ class TestParameterValidation:
     failure mode (a crash with an unrelated/confusing error, or a
     silently broken/nonsensical plate that still reports
     watertight: True). See the `Changelog` block in jig-plate.py's
-    module docstring for what each looked like before the check existed
-    (these are iterative changes, not in CHANGELOG.md, which only
-    records major/minor releases).
+    module docstring for what each looked like before the check existed;
+    CHANGELOG.md summarizes them in each release's section.
 
     Every case below matches on the actual error message, not just
     "some ValueError" -- a bare pytest.raises(ValueError) passes no
@@ -175,19 +258,27 @@ class TestParameterValidation:
         (dict(plate_y=0.0), "must be positive"),
         (dict(mag_count_x=2.0), "mag_count_x must be an int"),
         (dict(mag_count_x=True), "mag_count_x must be an int"),
-        (dict(mag_d=-1.0), "mag_d must be positive"),
-        (dict(mag_depth=0.0), "mag_depth must be positive"),
-        (dict(stack_w=0.0), "stack_w must be positive"),
-        (dict(stack_len=0.0), "stack_len must be positive"),
-        (dict(stack_h=0.0), "stack_h must be positive"),
-        (dict(deboss_d=0.0), "deboss_d must be positive"),
+        # minimum printable feature sizes
+        (dict(mag_d=-1.0), r"mag_d must be >= 0\.8 mm"),
+        (dict(mag_d=0.05, mag_depth=0.05), r"mag_d must be >= 0\.8 mm"),
+        (dict(mag_depth=0.0), r"mag_depth must be >= 0\.8 mm"),
+        (dict(mag_depth=0.05), r"mag_depth must be >= 0\.8 mm"),
+        (dict(stack_w=0.0), r"stack_w must be >= 0\.8 mm"),
+        (dict(stack_w=0.05), r"stack_w must be >= 0\.8 mm"),
+        (dict(stack_len=0.0), r"stack_len must be >= 0\.8 mm"),
+        (dict(stack_len=0.05), r"stack_len must be >= 0\.8 mm"),
+        (dict(stack_h=0.0), r"stack_h must be >= 0\.8 mm"),
+        (dict(stack_h=0.05), r"stack_h must be >= 0\.8 mm"),
+        (dict(deboss_d=0.0), r"deboss_d must be >= 0\.2 mm"),
+        (dict(deboss_d=0.001), r"deboss_d must be >= 0\.2 mm"),
         (dict(back_margin=-1.0), "front_margin/back_margin must be >= 0"),
         (dict(mag_count_x=1), "mag_count_x .* must be >= 2"),
         (dict(mag_count_x=0), "mag_count_x .* must be >= 2"),
-        (dict(stack_play=-0.2), "stack_play .* must be >= 0"),
+        (dict(stack_play=-0.2), r"stack_play must be >= 0\.1 mm"),
+        (dict(stack_play=0), r"stack_play must be >= 0\.1 mm"),  # press fit
         (dict(plate_x=300.0), "exceeds 246"),
         # derived-geometry containment (a feature exceeds the plate, or
-        # reaches a face with less than _min_wall of material left)
+        # reaches a face with less than _MIN_WALL of material left)
         (dict(mag_depth=9.5), "top or bottom face"),
         (dict(mag_d=10.0), "top or bottom face"),
         (dict(plate_z=4.0), "side-face branding"),  # branding Z-fit fires
@@ -197,8 +288,12 @@ class TestParameterValidation:
         (dict(stack_inset_x=2.0), "left/right edge"),
         (dict(stack_inset_y=0.5), "front/back edge"),
         # derived-geometry collisions (two features come within
-        # _min_wall of each other, or actually overlap)
-        (dict(plate_x=50.0), "comes within"),
+        # _MIN_WALL of each other, or actually overlap)
+        # the default mag_inset_x (30.75) is past half of a 50 mm plate
+        (dict(plate_x=50.0), "less than half"),
+        # insets below half the plate, but the plate is too small for the
+        # four bores between them (the collision path for plate size)
+        (dict(plate_x=70.0), "comes within"),
         (dict(mag_count_x=40), "comes within"),
         (dict(mag_inset_x=12.0), "comes within"),
         (dict(bottom_mag_inset_x=5.0), "comes within"),
@@ -215,6 +310,9 @@ class TestParameterValidation:
         (dict(deboss_d=9.0), "top or bottom face"),  # cuts clean through the top
         (dict(deboss_d=20.0), "top or bottom face"),
         (dict(label="W" * 30, deboss_d=2.0), "comes within"),  # reaches a bore
+        # fits the top face and the side-face Z range, so only the left-face
+        # branding box (its end reaches the front-left groove) rejects it
+        (dict(label="M" * 50), "left-face branding"),
     ])
     def test_rejected(self, kwargs, match):
         with pytest.raises(ValueError, match=match):
@@ -223,6 +321,14 @@ class TestParameterValidation:
     @pytest.mark.parametrize("kwargs", [
         dict(mag_count_x=6),
         dict(plate_z=12.0),
+        # exactly the minimum printable size builds
+        dict(mag_d=0.8),
+        dict(mag_depth=0.8),
+        dict(stack_w=0.8),
+        dict(stack_len=0.8),
+        dict(stack_h=0.8),
+        dict(deboss_d=0.2),
+        dict(stack_play=0.1),
     ])
     def test_valid_override_still_builds(self, kwargs):
         # a sanity check that the checks above aren't just universally
@@ -244,23 +350,36 @@ class TestMeshGeometry:
         assert not any(solid.contains(front_pts))
         assert not any(solid.contains(back_pts))
 
+    def test_default_magnet_bores_are_at_the_pinned_x_positions(self):
+        # literals, not g.mag_xs: changing the default mag_inset_x must
+        # fail here, not silently move the record and the mesh together
+        result = build_plate()
+        pinned = (30.75, 92.25, 153.75, 215.25)
+        assert result.geometry.mag_xs == pinned
+        z = result.geometry.plate_z / 2
+        for x in pinned:
+            for y in (0.5, result.geometry.plate_y - 0.5):
+                assert not result.solid.contains([(x, y, z)])[0]
+        # solid between the bores, so the probe isn't just always empty
+        assert result.solid.contains([(61.5, 0.5, z)])[0]
+
     def test_front_back_magnet_bores_share_x_position_on_the_mesh(self):
         # CLAUDE.md: "front and back bores share X positions ... so
-        # plates mate either way round." A contains()-at-centre probe
+        # plates mate either way round." A contains()-at-center probe
         # can't catch a real regression here: the bore radius is 3.05mm,
         # so even a 2mm X shift of one side still lands the probe point
         # inside the (moved) cavity. Measure each side's actual cavity
-        # centre independently via ray-casting instead, and compare them
-        # to each other -- not to the PlateGeometry.mag_xs list both
-        # sides are naively built from in the naive version above.
+        # center independently via ray-casting instead, and compare them
+        # to each other and to the nominal X, not just to the
+        # PlateGeometry.mag_xs tuple both sides are built from.
         result = build_plate()
         g, solid = result.geometry, result.solid
         z = g.plate_z / 2
         for nominal_x in g.mag_xs:
-            front_centre = _cavity_center_x(solid, 0.5, z, nominal_x)
-            back_centre = _cavity_center_x(solid, g.plate_y - 0.5, z, nominal_x)
-            assert front_centre == pytest.approx(nominal_x, abs=0.05)
-            assert back_centre == pytest.approx(front_centre, abs=0.05)
+            front_center = _cavity_center_x(solid, 0.5, z, nominal_x)
+            back_center = _cavity_center_x(solid, g.plate_y - 0.5, z, nominal_x)
+            assert front_center == pytest.approx(nominal_x, abs=0.05)
+            assert back_center == pytest.approx(front_center, abs=0.05)
 
     def test_between_front_magnet_bores_is_solid(self):
         result = build_plate()
@@ -344,7 +463,7 @@ class TestMeshGeometry:
         # probe just inside the groove's Y edge nearest the bore -- the
         # narrowest point of the wall, since the bore is a circle whose X
         # extent (at a given Y) widens as Y approaches the bore's own
-        # centre, and the groove's Y range doesn't reach that centre.
+        # center, and the groove's Y range doesn't reach that center.
         y_edge = (g.stack_w + g.stack_play) / 2 - 0.01
         y = stack_y + (y_edge if bore_y > stack_y else -y_edge)
         z = 0.75  # inside both the groove's Z range [0, stack_h + stack_play]
@@ -383,7 +502,7 @@ class TestMeshGeometry:
             assert back_depth == pytest.approx(front_depth, abs=1e-3)
 
     def test_front_back_magnet_bore_height_matches(self):
-        # both push-fit bores should be vertically centred at the same Z
+        # both push-fit bores should be vertically centered at the same Z
         # (plate_z / 2) -- measured on the mesh via a vertical ray through
         # each bore, not read back from geometry fields.
         result = build_plate()
@@ -398,10 +517,10 @@ class TestMeshGeometry:
             front_zs = sorted(front_locs[:, 2])
             back_zs = sorted(back_locs[:, 2])
             # crossings: [bottom face, bore bottom, bore top, top face]
-            front_centre = (front_zs[1] + front_zs[2]) / 2
-            back_centre = (back_zs[1] + back_zs[2]) / 2
-            assert front_centre == pytest.approx(g.plate_z / 2, abs=1e-3)
-            assert back_centre == pytest.approx(front_centre, abs=1e-3)
+            front_center = (front_zs[1] + front_zs[2]) / 2
+            back_center = (back_zs[1] + back_zs[2]) / 2
+            assert front_center == pytest.approx(g.plate_z / 2, abs=1e-3)
+            assert back_center == pytest.approx(front_center, abs=1e-3)
 
     def test_right_face_text_is_not_reversed(self):
         # 2.2.1 fixed a bug where the right-face deboss was effectively a
@@ -416,10 +535,9 @@ class TestMeshGeometry:
         # trusting the sign convention documented in a comment.
         result = build_plate()
         g, solid = result.geometry, result.solid
-        probe_x = g.plate_x - g.deboss_d / 2
-        y_samples = np.arange(1.0, g.plate_y - 1.0, 0.3)
-        z_samples = np.arange(1.0, g.plate_z - 0.5, 0.3)
-        pts = [(probe_x, y, z) for y in y_samples for z in z_samples]
+        pts = _deboss_scan_grid(
+            solid, 0, g.plate_x - g.deboss_d, g.plate_x - g.deboss_d / 2
+        )
         cluster1, cluster2 = _debossed_cavity_clusters(solid, pts, split_axis=1)
         # the logo's dome reaches higher (taller) than any text glyph, so
         # whichever cluster is taller is the logo -- confirms the split
@@ -437,10 +555,7 @@ class TestMeshGeometry:
         # HIGHER Y than the text -- reversed from the right face's check.
         result = build_plate()
         g, solid = result.geometry, result.solid
-        probe_x = g.deboss_d / 2
-        y_samples = np.arange(1.0, g.plate_y - 1.0, 0.3)
-        z_samples = np.arange(1.0, g.plate_z - 0.5, 0.3)
-        pts = [(probe_x, y, z) for y in y_samples for z in z_samples]
+        pts = _deboss_scan_grid(solid, 0, g.deboss_d, g.deboss_d / 2)
         cluster1, cluster2 = _debossed_cavity_clusters(solid, pts, split_axis=1)
         taller, shorter = (
             (cluster1, cluster2)
@@ -460,10 +575,9 @@ class TestMeshGeometry:
         # text being individually reversed, which this can't see.
         result = build_plate()
         g, solid = result.geometry, result.solid
-        probe_z = g.plate_z - g.deboss_d / 2
-        x_samples = np.arange(1.0, g.plate_x - 1.0, 0.3)
-        y_samples = np.arange(0.5, g.front_margin + 5.0, 0.3)
-        pts = [(x, y, probe_z) for x in x_samples for y in y_samples]
+        pts = _deboss_scan_grid(
+            solid, 2, g.plate_z - g.deboss_d, g.plate_z - g.deboss_d / 2
+        )
         cluster1, cluster2 = _debossed_cavity_clusters(solid, pts, split_axis=0)
         # the logo (_lw=6mm wide) is much narrower in X than the label
         # text, so whichever cluster is narrower is the logo -- confirms
@@ -485,10 +599,9 @@ class TestMeshGeometry:
         # order being tested.
         result = build_plate(label="IW")
         g, solid = result.geometry, result.solid
-        probe_z = g.plate_z - g.deboss_d / 2
-        x_samples = np.arange(1.0, g.plate_x - 1.0, 0.3)
-        y_samples = np.arange(0.5, g.front_margin + 5.0, 0.3)
-        pts = [(x, y, probe_z) for x in x_samples for y in y_samples]
+        pts = _deboss_scan_grid(
+            solid, 2, g.plate_z - g.deboss_d, g.plate_z - g.deboss_d / 2
+        )
         logo_cluster, text_cluster = _debossed_cavity_clusters(
             solid, pts, split_axis=0
         )
@@ -515,12 +628,12 @@ class TestGeometryPositions:
     """CLAUDE.md design constraints that must not regress."""
 
     @pytest.mark.parametrize("mag_count_x", [2, 3, 4, 5])
-    def test_magnet_bores_symmetric_about_x_centreline(self, mag_count_x):
+    def test_magnet_bores_symmetric_about_x_centerline(self, mag_count_x):
         geom = build_plate(mag_count_x=mag_count_x).geometry
-        centre = geom.plate_x / 2
-        offsets = sorted(abs(x - centre) for x in geom.mag_xs)
+        center = geom.plate_x / 2
+        offsets = sorted(abs(x - center) for x in geom.mag_xs)
         if len(offsets) % 2:
-            # an odd count has one bore exactly on the centreline
+            # an odd count has one bore exactly on the centerline
             assert offsets[0] == pytest.approx(0.0, abs=1e-9)
             offsets = offsets[1:]
         for a, b in zip(offsets[0::2], offsets[1::2]):
@@ -544,6 +657,21 @@ class TestGeometryPositions:
         assert geom.bottom_mag_inset_x == 12.0
         assert geom.bottom_mag_ys == (5.0, 213.0)
 
+    def test_top_branding_bounds_cover_the_debossed_logo_in_the_front_band(self):
+        result = build_plate()
+        g = result.geometry
+        x0, y0, x1, y1 = g.top_branding_bounds
+        assert 0 < y0 < y1 <= g.front_margin
+        # centered on the plate in X (logo + label as one block)
+        assert (x0 + x1) / 2 == pytest.approx(g.plate_x / 2, abs=1.0)
+        # the logo dome's center (3 mm in from the block's left edge, just
+        # above the band's centerline) is debossed: empty just under the top
+        probe = (x0 + 3.0, g.front_margin / 2 + 1.5, g.plate_z - g.deboss_d / 2)
+        assert not result.solid.contains([probe])[0]
+        # and the plate is solid just outside the footprint
+        outside = (x0 - 2.0, g.front_margin / 2, g.plate_z - g.deboss_d / 2)
+        assert result.solid.contains([outside])[0]
+
 
 class TestPurity:
     """build_plate() must have no side effects -- no file I/O, no argv."""
@@ -552,3 +680,72 @@ class TestPurity:
         monkeypatch.chdir(tmp_path)
         build_plate()
         assert list(tmp_path.iterdir()) == []
+
+
+class TestNumpyAndNumberTypes:
+    """Any real number is accepted for the float parameters and any integer
+    for mag_count_x, numpy scalars included; bools of either kind and
+    non-numbers are still rejected."""
+
+    @staticmethod
+    def _stl(result):
+        return result.solid.export(file_type="stl")
+
+    def test_numpy_scalars_build_the_identical_default_plate(self):
+        import numpy as np
+
+        default = self._stl(build_plate())
+        result = build_plate(
+            plate_x=np.float32(246.0), plate_y=np.float64(218.0),
+            plate_z=np.float32(9.0), mag_d=np.float64(6.1),
+            mag_count_x=np.int64(4), stack_w=np.float32(1.5),
+        )
+        # 6.1 as float64 is the default exactly; the float32 values above
+        # are exactly representable, so the mesh must match byte for byte
+        assert self._stl(result) == default
+
+    def test_numpy_integers_and_fractions_are_accepted(self):
+        import fractions
+
+        import numpy as np
+
+        build_plate(mag_count_x=np.int32(4), plate_y=np.int64(218))
+        build_plate(plate_y=fractions.Fraction(218))
+
+    def test_geometry_holds_plain_python_numbers(self):
+        import numpy as np
+
+        geom = build_plate(plate_x=np.float32(246.0)).geometry
+        assert type(geom.plate_x) is float
+
+    @pytest.mark.parametrize("name,value", [
+        ("plate_x", True), ("plate_x", "246"), ("plate_x", None),
+        ("mag_d", "6.1"),
+    ])
+    def test_bools_and_non_numbers_still_rejected_for_floats(self, name, value):
+        with pytest.raises(ValueError, match=f"{name} must be a number"):
+            build_plate(**{name: value})
+
+    def test_numpy_bool_rejected_for_floats(self):
+        import numpy as np
+
+        with pytest.raises(ValueError, match="plate_x must be a number"):
+            build_plate(plate_x=np.bool_(True))
+
+    @pytest.mark.parametrize("value", [True, "4", 4.0, None])
+    def test_bools_and_non_integers_still_rejected_for_mag_count_x(self, value):
+        with pytest.raises(ValueError, match="mag_count_x must be an int"):
+            build_plate(mag_count_x=value)
+
+    def test_numpy_bool_rejected_for_mag_count_x(self):
+        import numpy as np
+
+        with pytest.raises(ValueError, match="mag_count_x must be an int"):
+            build_plate(mag_count_x=np.bool_(True))
+
+    def test_non_finite_numpy_values_still_rejected(self):
+        import numpy as np
+
+        for bad in (np.float32("nan"), np.float64("inf")):
+            with pytest.raises(ValueError, match="plate_x must be finite"):
+                build_plate(plate_x=bad)

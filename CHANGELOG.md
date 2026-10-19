@@ -1,11 +1,11 @@
 # Jig Plate — Changelog
 
-| | |
+| Item | Value |
 |---|---|
 | **Generator (CLI)** | `jig-plate.py` |
 | **Generator (library)** | `jig_plate_base.py` (`build_plate()`) |
 | **Meshes** | `jig_plate_<version>.stl` |
-| **Latest release** | 3.0.0 |
+| **Latest release** | 3.1.0 |
 
 ## Versioning
 
@@ -15,12 +15,16 @@
 |---|---|
 | `major` | Bumped only on explicit command; zeroes minor and iterative |
 | `minor` | Bumped only on explicit command; zeroes iterative |
-| `iterative` | Incremented automatically on any change to the generated model: a change to the plate's default output (geometry, dimensions, positions) *or* a change to how the model is generated (parameters, CLI options, generation logic), even if the default output itself is unaffected. A default-output change is the clearer, more common case. |
+| `iterative` | Incremented automatically, once per merged branch (not per issue or commit), for every branch merged to `develop`: geometry, generation logic, CLI, drawings, tests or docs |
 
-**This file records major and minor releases only,** newest first. Iterative
-changes are not given entries here; they are folded into the next minor release
-when one is cut. The running record of every iterative change is the `Changelog`
-block in the generator docstring, which is updated on every model change.
+Every change gets an entry here, newest first, saying what changed for
+the user and citing issue numbers. Iterative entries
+up to 3.0.0 were recorded only in the `Changelog` block of the generator
+docstring and folded into the release entries below; from 3.0.1 on, each
+iterative change has its own entry here as well. When a release bumps
+the major or minor version (at its merge into `main`), the iterative
+entries it covers are squashed into that release's section; git history
+keeps the originals.
 
 Each version's number appears in three places and they are kept in sync: the
 `VERSION` constant in `jig-plate.py` (also mirrored in `pyproject.toml`),
@@ -30,11 +34,140 @@ never changes -- it isn't one of the three.
 
 ---
 
+## 3.1.0 — Thin plates, accessible drawings, safer CLI output
+
+Minor release. Folds iterative changes 3.0.1–3.0.27 into a versioned
+release: the post-3.0.0 review fixes, an option to leave the side faces
+plain, the drawings in the README, and the fixes from the blind review of
+`release/3.1.0`. The plate and coupon geometry at the defaults are
+unchanged from 3.0.0 (triangle data byte-identical).
+
+### Added
+- `build_plate(side_branding=True)`: pass `False` to leave the left and
+  right faces plain. The side mark is a fixed size (a 4 mm label beside a
+  taller logo, about 5.8 mm in all) and needs a `plate_z` of about 7.4 mm;
+  the default 6.1 mm magnet bores need about 7.7 mm, so a thinner plate
+  also needs a smaller `mag_d`/`mag_depth`. With `False` the label only has
+  to fit `plate_x`. The top-face branding is unchanged, a non-bool value
+  raises `ValueError`, and the CLI has no flag for it (#7, #54).
+- `PlateGeometry.top_branding_bounds`, the top-face branding footprint;
+  `front_margin`/`back_margin` are documented, and `back_margin` is kept
+  for pocket-layout scripts that need the back band (#28).
+- The README shows the isometric diagram and the three technical drawings,
+  each with a text alternative giving its dimensions and linked to its
+  full-size file. Copies live in `docs/images/` under unversioned names
+  (#54).
+- `requirements.lock`, a pinned and hashed lock of every dependency; the
+  documented setup installs from it with `--require-hashes` on Python 3.14,
+  so a fresh venv reproduces the same meshes (#16).
+
+### Changed
+- The CLI prints one labeled line per mesh, `plate | watertight: True |
+  volume cm3: ... | bbox: ... | faces: ...` and the same for
+  `stack coupon` (it used to print `stack coupon: True 8.09 cm3 [...]`)
+  (#54).
+- `build_plate()` accepts numpy scalars such as `np.float32` and `np.int64`
+  (any `numbers.Real`, and any `numbers.Integral` for `mag_count_x`);
+  `bool`, `np.bool_` and non-numbers are still rejected, and values reach
+  the geometry as plain Python numbers, so
+  `build_plate(plate_x=np.float32(246.0), mag_count_x=np.int64(4))` builds
+  the same mesh as `build_plate()` (#54).
+- `pytest` and `rtree` are a `test` extra in `pyproject.toml` rather than
+  runtime dependencies (#28).
+- Drawings: every label is at least 7 pt, and the front elevation is a
+  narrower figure so its labels read larger at README width (#54).
+- The 3.0.0 notes below now list every change that can break a script
+  written against 2.4.0 and match the test record, and code comments,
+  docstrings and the README use American spelling (#22, #23, #26).
+
+### Fixed
+- `jig-plate.py` still writes both STLs when a mesh is not watertight, so
+  it can be inspected, but prints an error naming the mesh to stderr and
+  exits 1 instead of 0 (#28).
+- `build_plate()` raises a `ValueError` naming the parameter and its
+  minimum for features too small to print, instead of returning a
+  "watertight" plate silently missing its rib, bores or branding:
+  `mag_d`, `mag_depth`, `stack_w`, `stack_len` and `stack_h` must be
+  >= 0.8 mm, `deboss_d` >= 0.2 mm and `stack_play` >= 0.1 mm (#6).
+- `build_plate()` input edge cases: a parameter too large for a float
+  (`plate_x=10**400`) raises `ValueError` naming it, not `TypeError`;
+  `mag_inset_x` or `stack_inset_x` of half the plate or more raises
+  instead of returning bore or rib positions in descending order (#54).
+- `pip install .`, `pip install -e .` and `pip install ".[test]"` work:
+  `pyproject.toml` gains a `[build-system]` table and an explicit
+  `py-modules = ["jig_plate_base"]` (#35).
+- Technical drawings no longer rely on color: the top plan and front
+  elevation each have a key under the drawing, hidden magnet bores are
+  dotted and hidden grooves dashed, and each key swatch is drawn in its
+  feature's line style and shape (#51).
+- Drawing labels that were 2.9 to 3.6:1 against their background now reach
+  at least 4.5:1; key swatches are outlined and the top plan's extension
+  lines are no longer faded (#50, #54).
+- The top plan shows the debossed branding footprint; the front elevation
+  shows the hidden bottom bores and grooves; the isometric diagram states
+  its ×3 vertical exaggeration, keeps its labels off the part and has no
+  crossing leaders; the 0.2 mm clearance, 4 mm rib-inset and 4.5 mm
+  bore-height dimensions no longer collide with their arrowheads or
+  outlines (#28, #36, #54).
+- The isometric diagram's corner stacking rib, a few pixels at full scale,
+  gets a dashed callout frame and a "Detail A, ×6" inset (#37).
+- The README's Dimensions table and this file's summary table have real
+  header rows instead of empty ones (#54, #60).
+
+### Security
+- The CLI no longer writes through a symlink at an output path: every STL
+  and PNG is built in memory, written to a temporary file in the same
+  directory and moved onto the target, so a symlink is replaced instead of
+  followed and a failed write leaves no partial or temporary file (#53).
+- An over-long label is rejected before its glyphs are rendered: a
+  6,000-character label took about 5.5 s to reject and now takes about
+  0.14 s. Every label that built before still builds (#52).
+
+### Test suite
+
+Grew from 86 tests at 3.0.0 to 199. New tests cover the drawings (label
+size and contrast, feature keys, margins), parameter edge cases, label
+length, atomic writes and packaging. The `$` label test checks the
+rendered glyphs instead of only watertightness (#1); the four
+text-orientation tests scan only the debossed area, so the suite runs in
+about 6 s instead of 13-14 s (#48); and the validation tests' docstring
+describes this file correctly (#30).
+
+### Result
+
+**481.5 cm³, bounding box 246 × 218 × 10.5 mm, 6806 faces — unchanged from
+3.0.0.** Stack coupon unchanged at 8.09 cm³, 46 × 20 × 10.5 mm. Verified
+watertight (plate and coupon); triangle data (bytes 80 onward) of both STLs
+byte-identical to 3.0.0.
+
+### Validation
+
+The 1.7 mm stacking groove passed a test print.
+
+### Files
+
+- `jig-plate.py`
+- `jig_plate_base.py`
+- `tests/`
+- `README.md`
+- `CLAUDE.md`
+- `CHANGELOG.md`
+- `pyproject.toml`
+- `requirements.lock`
+- `docs/images/`
+
+### Generated Files
+
+- `jig_plate_3.1.0.stl`
+- `jig_plate_3.1.0_stack_coupon.stl`
+
+---
+
 ## 3.0.0 — Lightening cutout reverted; derived-geometry validation
 
 Major release. Folds iterative changes 2.4.1–2.4.13 into a versioned
-release — six rounds of independent code review plus a full reversal of
-2.4.0's headline feature.
+release — the independent code-review rounds of 2.4.6–2.4.12 plus a full
+reversal of 2.4.0's headline feature.
 
 ### Removed
 
@@ -48,6 +181,23 @@ release — six rounds of independent code review plus a full reversal of
   2.3.0/pre-2.3.1 — this release nets out to **no change** in the
   lightening feature versus what shipped before 2.4.0, only churn in
   between.
+- **`PlateGeometry`'s `honeycomb_*` fields** (`honeycomb_enabled`,
+  `honeycomb_skin`, `honeycomb_wall`, `honeycomb_af`,
+  `honeycomb_margin_x`, `honeycomb_margin_y`) went with the cutout. A
+  script reading `result.geometry.honeycomb_*` now gets an
+  `AttributeError`.
+
+### Changed
+
+Both can break a script written against 2.4.0:
+
+- `PlateGeometry.mag_xs` and `bottom_mag_ys` are tuples, not lists
+  (since 2.4.10), matching `stack_xs`/`stack_ys`. Changing them in place,
+  or comparing them with `== [...]`, no longer works; compare with a
+  tuple or convert with `list()`.
+- A `--label` that `build_plate()` rejects now makes the CLI print its
+  usage line and the error and exit with status 2, the way argparse
+  reports its own errors, instead of a Python traceback and status 1.
 
 ### Added
 
@@ -104,13 +254,15 @@ release — six rounds of independent code review plus a full reversal of
 
 ### Test suite
 
-Grew from 0 tests at 2.4.0 to 86, added across all six review rounds
-and largely built against the actual mesh (ray-casting, `contains()`)
-rather than the input parameters, so a bug in the real boolean geometry
-can't hide behind metadata that merely echoes its inputs. Every check
-added this range was verified, by temporarily reintroducing the bug it
-targets, to actually fail — not just pass regardless of the underlying
-geometry.
+Grew from 0 tests at 2.4.0 to 86. The first 32 came with 2.4.4 (25
+survived the 2.4.5 revert); the rest were added across the review rounds
+of 2.4.6–2.4.12. They are largely built against the actual mesh
+(ray-casting, `contains()`) rather than the input parameters, so a bug in
+the real boolean geometry can't hide behind metadata that merely echoes
+its inputs. Many checks were mutation-tested (the bug they target
+temporarily reintroduced to confirm they fail), as each iterative entry
+notes, but not all: later review found mutations the suite didn't catch,
+closed in 3.0.3 and 3.0.6.
 
 ### Why a major bump
 
