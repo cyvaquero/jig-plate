@@ -34,6 +34,17 @@ never changes -- it isn't one of the three.
 
 ---
 
+## 3.0.27 — Side branding height stated correctly
+
+Iterative (unreleased). Docs only; the plate and coupon geometry are
+unchanged from 3.0.11 (triangle data byte-identical).
+
+### Fixed
+- The README and the `build_plate()` docstring called the left- and
+  right-face branding "a fixed 4 mm tall". 4 mm is the label size; with
+  the logo the side mark is about 5.8 mm tall, which is what sets the
+  7.4 mm minimum `plate_z` (#54).
+
 ## 3.0.26 — Thin-plate limits stated correctly
 
 Iterative (unreleased). Docs only; the plate and coupon geometry are

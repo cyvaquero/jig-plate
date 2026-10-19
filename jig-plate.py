@@ -785,6 +785,11 @@ Changelog
          and 7.7 builds at default bores; STL triangle data (bytes 80+)
          byte-identical to 3.0.11; both meshes watertight; full test suite
          passes.
+  3.0.27 docs only (#54): README and build_plate docstring give the side
+         mark's real height (4 mm label plus logo, 5.76 mm at the default
+         label, measured from the left-face deboss vertices) instead of
+         "4 mm tall". Verified: STL triangle data (bytes 80+) byte-identical
+         to 3.0.11; both meshes watertight; full test suite passes.
 """
 import argparse
 import io
@@ -818,7 +823,7 @@ def _solid(color, alpha):
     fg, bg = _to_rgba(color), _to_rgba(BG)
     return tuple(alpha * c + (1 - alpha) * b for c, b in zip(fg[:3], bg[:3])) + (1.0,)
 
-VERSION = "3.0.26"
+VERSION = "3.0.27"
 OUT_DIR = Path(__file__).resolve().parent / "output"
 IMG_DIR = Path(__file__).resolve().parent / "images"
 
