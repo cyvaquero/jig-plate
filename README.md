@@ -202,8 +202,9 @@ naming the parameter and its minimum: `mag_d`, `mag_depth`, `stack_w`,
 height), and `stack_play` at least 0.1 mm (0 is a press fit that won't seat
 on FDM prints).
 
-The left- and right-face branding is a fixed 4 mm tall and needs a
-`plate_z` of about 7.4 mm or more. The default 6.1 mm magnet bores need
+The left- and right-face branding is a fixed size (a 4 mm label beside a
+taller logo, about 5.8 mm in all) and needs a `plate_z` of about 7.4 mm or
+more. The default 6.1 mm magnet bores need
 about 7.7 mm, so a thinner plate also needs smaller bores (`mag_d`,
 `mag_depth`). Below 7.4 mm pass `side_branding=False` as well: the side
 faces stay plain and neither the side-face Z-fit check nor the side-face
