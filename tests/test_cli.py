@@ -100,6 +100,23 @@ class TestWriteAtomic:
 
         assert list(tmp_path.iterdir()) == []
 
+    def test_cleanup_tolerates_a_temp_file_that_is_already_gone(
+        self, tmp_path, monkeypatch
+    ):
+        target = tmp_path / "out.bin"
+
+        def _vanish_then_fail(src, dst):
+            jig_plate_cli.os.unlink(src)  # something else removed the temp
+            raise OSError("replace failed")
+
+        monkeypatch.setattr(jig_plate_cli.os, "replace", _vanish_then_fail)
+        # the original error surfaces, not the FileNotFoundError from
+        # the cleanup's own unlink
+        with pytest.raises(OSError, match="replace failed") as exc_info:
+            jig_plate_cli.write_atomic(target, b"new")
+        assert not isinstance(exc_info.value, FileNotFoundError)
+        assert list(tmp_path.iterdir()) == []
+
     def test_file_mode_follows_the_umask_not_0600(self, tmp_path):
         import os
 
@@ -285,3 +302,14 @@ class TestMainDoesNotWriteThroughSymlinks:
             jig_plate_cli.main()
 
         assert list(out_dir.iterdir()) == []
+
+
+class TestRunAsScript:
+    def test_dunder_main_guard_calls_main(self, monkeypatch, capsys):
+        import runpy
+
+        monkeypatch.setattr(sys, "argv", ["jig-plate.py", "--help"])
+        with pytest.raises(SystemExit) as exc_info:
+            runpy.run_path(str(_SCRIPT), run_name="__main__")
+        assert exc_info.value.code == 0
+        assert "usage:" in capsys.readouterr().out
