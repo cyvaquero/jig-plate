@@ -34,6 +34,21 @@ never changes -- it isn't one of the three.
 
 ---
 
+## 3.1.1 — Tests for previously unreached label and file-write paths
+
+Iterative (unreleased). Tests only; the plate and coupon geometry are
+unchanged from 3.1.0 (triangle data byte-identical).
+
+### Added
+- Six tests (205 in all, up from 199) cover code no test reached: the
+  repair of an invalid glyph outline, the skipped empty or tiny pieces in
+  the three deboss cutters, `write_atomic`'s cleanup when its temp file is
+  already gone, and running `jig-plate.py` as a script (#68). Each fails
+  if the line it covers is removed.
+- Not covered, because no input reaches them through `build_plate()`: the
+  fit check's skip of a feature with no bounds, and its "extends below the
+  bottom face" error for a stacking rib (#68).
+
 ## 3.1.0 — Thin plates, accessible drawings, safer CLI output
 
 Minor release. Folds iterative changes 3.0.1–3.0.27 into a versioned
