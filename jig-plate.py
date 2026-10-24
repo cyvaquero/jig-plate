@@ -796,6 +796,14 @@ Changelog
          README drawings). Verified: STL triangle data (bytes 80+)
          byte-identical to 3.0.0 and 3.0.11; both meshes watertight;
          full test suite passes (199); drawings viewed.
+  3.1.1  tests only (#68): six new tests (205 in all) cover label-cutter
+         and write_atomic paths no test reached: the buffer(0) repair of
+         an invalid glyph polygon, the empty/tiny-piece skip in the three
+         deboss cutters, write_atomic's cleanup when the temp file is
+         already gone, and the __main__ guard. Each was mutation-checked
+         (breaking the line fails its test). Verified: STL triangle data
+         (bytes 80+) byte-identical to 3.1.0; both meshes watertight; full
+         test suite passes (205).
 """
 import argparse
 import io
@@ -829,7 +837,7 @@ def _solid(color, alpha):
     fg, bg = _to_rgba(color), _to_rgba(BG)
     return tuple(alpha * c + (1 - alpha) * b for c, b in zip(fg[:3], bg[:3])) + (1.0,)
 
-VERSION = "3.1.0"
+VERSION = "3.1.1"
 OUT_DIR = Path(__file__).resolve().parent / "output"
 IMG_DIR = Path(__file__).resolve().parent / "images"
 
