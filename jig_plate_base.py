@@ -555,7 +555,7 @@ def build_plate(
     # Every other boundary must keep _MIN_WALL clear of the far face, or
     # the cut leaves less material there than can reliably print, which
     # is just as broken as overshooting it outright.
-    _features = []  # (name, (x0,y0,z0,x1,y1,z1), bounds_or_None, touch_set)
+    _features = []  # (name, (x0,y0,z0,x1,y1,z1), bounds, touch_set)
     _plate_bounds = (0.0, 0.0, 0.0, plate_x, plate_y, plate_z)
     for _mx in mag_xs:
         _features.append((
@@ -581,7 +581,11 @@ def build_plate(
     for _mx in stack_xs:
         for _my in stack_ys:
             # the rib stands proud above the top face by design, so its
-            # containment check has no Z-upper-bound
+            # containment check has no Z-upper-bound (None). Its Z minimum
+            # is plate_z, so nothing checks it here: the bottom-corner and
+            # front/back bores, listed before every rib, already need
+            # plate_z >= mag_depth + _MIN_WALL >= 2 * _MIN_WALL and raise
+            # first for any thinner plate.
             _features.append((
                 f"stacking rib @({_mx:.2f}, {_my:.2f})",
                 (_mx - stack_len / 2, _my - stack_w / 2, plate_z,
@@ -629,8 +633,6 @@ def build_plate(
         return lo_ok and hi_ok
 
     for _name, _box, _bounds, _touch in _features:
-        if _bounds is None:
-            continue
         _x0, _y0, _z0, _x1, _y1, _z1 = _box
         _bx0, _by0, _bz0, _bx1, _by1, _bz1 = _bounds
         if not _bound_ok(_x0, _x1, _bx0, _bx1,
@@ -647,17 +649,10 @@ def build_plate(
                 f"leaves less than {_MIN_WALL}mm of material there "
                 f"(Y {_y0:.2f}..{_y1:.2f}, plate is 0..{_by1:.2f})"
             )
-        if _bz1 is None:
-            # no upper Z bound (the rib stands proud); same _eps handling
-            # as every other bound via an infinite upper limit
-            if not _bound_ok(_z0, _z1, _bz0, np.inf,
-                              "z_min" in _touch, True):
-                raise ValueError(
-                    f"{_name} extends below the bottom face "
-                    f"(Z min {_z0:.2f})"
-                )
-        elif not _bound_ok(_z0, _z1, _bz0, _bz1,
-                            "z_min" in _touch, "z_max" in _touch):
+        # no Z check for the rib (_bz1 is None): it stands proud, and its
+        # Z minimum is covered by the bore checks (see above)
+        if _bz1 is not None and not _bound_ok(
+                _z0, _z1, _bz0, _bz1, "z_min" in _touch, "z_max" in _touch):
             raise ValueError(
                 f"{_name} extends past the top or bottom face, or "
                 f"leaves less than {_MIN_WALL}mm of material there "
