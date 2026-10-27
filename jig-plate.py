@@ -814,6 +814,10 @@ Changelog
          branch; error messages for a set of invalid inputs identical to
          3.1.1; STL triangle data (bytes 80+) byte-identical to 3.1.1; both
          meshes watertight; full test suite passes (206).
+  3.1.3  MIT license (#29): adds LICENSE and replaces the README's "no
+         license" line. No code change. Verified: STL triangle data
+         (bytes 80+) byte-identical to 3.1.2; both meshes watertight; full
+         test suite passes (206).
 """
 import argparse
 import io
@@ -847,7 +851,7 @@ def _solid(color, alpha):
     fg, bg = _to_rgba(color), _to_rgba(BG)
     return tuple(alpha * c + (1 - alpha) * b for c, b in zip(fg[:3], bg[:3])) + (1.0,)
 
-VERSION = "3.1.2"
+VERSION = "3.1.3"
 OUT_DIR = Path(__file__).resolve().parent / "output"
 IMG_DIR = Path(__file__).resolve().parent / "images"
 

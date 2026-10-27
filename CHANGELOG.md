@@ -34,6 +34,15 @@ never changes -- it isn't one of the three.
 
 ---
 
+## 3.1.3 — MIT license
+
+Iterative (unreleased). No code change: the plate and coupon geometry are
+unchanged from 3.1.2 (triangle data byte-identical).
+
+### Added
+- `LICENSE` (MIT). The README's license section no longer says all rights
+  are reserved (#29).
+
 ## 3.1.2 — Remove two unreachable fit-check branches
 
 Iterative (unreleased). No user-visible change: the plate and coupon
