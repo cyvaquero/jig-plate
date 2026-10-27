@@ -44,3 +44,22 @@ def test_inset_at_or_past_half_the_plate_is_rejected(name, value):
 def test_insets_below_half_still_ascend():
     g = build_plate(mag_count_x=2, mag_inset_x=100.0).geometry
     assert g.mag_xs[0] < g.mag_xs[1]
+
+
+def test_thin_plate_is_rejected_by_a_bore_before_the_rib_is_checked():
+    # The fit check has no Z-minimum test of its own for the stacking rib
+    # (it stands proud and starts at plate_z): the bore checks, which come
+    # first, already need plate_z >= mag_depth + 0.8 >= 1.6, and the front
+    # and back bores need mag_d + 1.6. This pins that invariant: a plate
+    # just below the smallest accepted thickness fails on a bore, never
+    # on a rib, and the smallest accepted thickness builds.
+    smallest = 6.1 + 1.6  # default mag_d, plus a wall above and below
+    kw = dict(side_branding=False)
+    with pytest.raises(ValueError, match="front push-fit bore"):
+        build_plate(plate_z=smallest - 0.01, **kw)
+    assert build_plate(plate_z=smallest, **kw).geometry.plate_z == smallest
+    # smallest printable bore: below mag_d + 1.6 = 2.4 a bore still fails
+    # first, never the rib
+    for plate_z in (0.8, 1.0, 1.6, 2.0, 2.39):
+        with pytest.raises(ValueError, match="bore"):
+            build_plate(plate_z=plate_z, mag_d=0.8, mag_depth=0.8, **kw)
