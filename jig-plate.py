@@ -804,6 +804,16 @@ Changelog
          (breaking the line fails its test). Verified: STL triangle data
          (bytes 80+) byte-identical to 3.1.0; both meshes watertight; full
          test suite passes (205).
+  3.1.2  pruned two unreachable fit-check branches (#68): the skip of a
+         feature with no bounds (every feature has bounds) and the "extends
+         below the bottom face" error for a stacking rib (the bore checks,
+         listed first, already need plate_z >= mag_depth + 0.8 >= 1.6, so a
+         thinner plate fails on a bore first). One new test (206 in all)
+         pins that invariant. Verified: sweeping plate_z, mag_depth and
+         other parameters through an instrumented copy never reached either
+         branch; error messages for a set of invalid inputs identical to
+         3.1.1; STL triangle data (bytes 80+) byte-identical to 3.1.1; both
+         meshes watertight; full test suite passes (206).
 """
 import argparse
 import io
@@ -837,7 +847,7 @@ def _solid(color, alpha):
     fg, bg = _to_rgba(color), _to_rgba(BG)
     return tuple(alpha * c + (1 - alpha) * b for c, b in zip(fg[:3], bg[:3])) + (1.0,)
 
-VERSION = "3.1.1"
+VERSION = "3.1.2"
 OUT_DIR = Path(__file__).resolve().parent / "output"
 IMG_DIR = Path(__file__).resolve().parent / "images"
 

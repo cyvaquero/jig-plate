@@ -34,6 +34,24 @@ never changes -- it isn't one of the three.
 
 ---
 
+## 3.1.2 — Remove two unreachable fit-check branches
+
+Iterative (unreleased). No user-visible change: the plate and coupon
+geometry are unchanged from 3.1.1 (triangle data byte-identical) and every
+error message is the same.
+
+### Changed
+- The fit check no longer has a skip for a feature with no bounds (every
+  feature has bounds) or an "extends below the bottom face" error for a
+  stacking rib. A plate too thin for the rib already fails on a bore first,
+  because the bore checks need `plate_z` of at least `mag_depth` plus 0.8 mm
+  (#68).
+
+### Added
+- One test (206 in all, up from 205) pins that a plate just below the
+  smallest accepted thickness fails on a bore, never on a rib, and that the
+  smallest accepted thickness builds (#68).
+
 ## 3.1.1 — Tests for previously unreached label and file-write paths
 
 Iterative (unreleased). Tests only; the plate and coupon geometry are
@@ -47,7 +65,7 @@ unchanged from 3.1.0 (triangle data byte-identical).
   if the line it covers is removed.
 - Not covered, because no input reaches them through `build_plate()`: the
   fit check's skip of a feature with no bounds, and its "extends below the
-  bottom face" error for a stacking rib (#68).
+  bottom face" error for a stacking rib (#68). Removed in 3.1.2.
 
 ## 3.1.0 — Thin plates, accessible drawings, safer CLI output
 
