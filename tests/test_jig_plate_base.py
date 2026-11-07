@@ -749,3 +749,146 @@ class TestNumpyAndNumberTypes:
         for bad in (np.float32("nan"), np.float64("inf")):
             with pytest.raises(ValueError, match="plate_x must be finite"):
                 build_plate(plate_x=bad)
+
+
+# ---- printer profiles -------------------------------------------------
+
+from jig_plate_base import (  # noqa: E402
+    PRINTER_ALIASES, PRINTER_PROFILES, get_printer_profile, printer_names,
+)
+
+# name -> (max_x, max_y, max_z, default_x, default_y), from the issue's
+# tables (not yet checked against Bambu Lab's official spec pages)
+EXPECTED_PROFILES = {
+    "a1": (256, 256, 256, 246, 244),
+    "p1s": (256, 256, 256, 246, 218),
+    "p2s": (256, 256, 256, 246, 244),
+    "x1c": (256, 256, 256, 246, 218),
+    "x2d-left": (256, 256, 260, 246, 244),
+    "x2d-right": (235.5, 256, 256, 225.5, 244),
+    "h2s": (340, 320, 340, 330, 308),
+    "h2d-left": (325, 320, 325, 315, 308),
+    "h2d-right": (325, 320, 325, 315, 308),
+    "h2c-left": (325, 320, 320, 315, 308),
+    "h2c-right": (305, 320, 325, 295, 308),
+    "h3c": (330, 320, 325, 320, 308),
+}
+
+
+class TestPrinterProfiles:
+    def test_table_matches_the_documented_figures(self):
+        assert set(PRINTER_PROFILES) == set(EXPECTED_PROFILES)
+        for name, want in EXPECTED_PROFILES.items():
+            p = PRINTER_PROFILES[name]
+            assert p.name == name
+            assert (p.max_x, p.max_y, p.max_z,
+                    p.default_x, p.default_y) == want
+
+    @pytest.mark.parametrize("name", sorted(EXPECTED_PROFILES))
+    def test_default_size_is_ten_mm_inside_a_clear_rectangle(self, name):
+        p = get_printer_profile(name)
+        assert p.default_x <= p.max_x and p.default_y <= p.max_y
+        # the plate with its ribs fits the height at the default plate_z
+        assert 9.0 + 1.5 <= p.max_z
+
+    @pytest.mark.parametrize("alias,target", sorted(PRINTER_ALIASES.items()))
+    def test_bare_dual_nozzle_name_is_the_larger_nozzle(self, alias, target):
+        assert get_printer_profile(alias) is PRINTER_PROFILES[target]
+        other = PRINTER_PROFILES[target.replace("left", "right")]
+        assert PRINTER_PROFILES[target].max_x >= other.max_x
+
+    def test_names_are_case_and_space_insensitive(self):
+        assert get_printer_profile(" H2D-Right ").name == "h2d-right"
+
+    @pytest.mark.parametrize("bad", ["x9", "", "h2d-middle", 5, ["a1"]])
+    def test_unknown_printer_rejected(self, bad):
+        with pytest.raises(ValueError, match="unknown printer"):
+            get_printer_profile(bad)
+        with pytest.raises(ValueError, match="unknown printer"):
+            build_plate(printer=bad)
+
+    def test_printer_names_lists_profiles_and_aliases(self):
+        assert set(printer_names()) == (
+            set(PRINTER_PROFILES) | set(PRINTER_ALIASES))
+
+
+class TestPrinterBuilds:
+    @pytest.mark.parametrize("name", sorted(EXPECTED_PROFILES))
+    def test_every_profile_builds_its_default_plate_watertight(self, name):
+        want = EXPECTED_PROFILES[name]
+        r = build_plate(printer=name)
+        assert r.solid.is_watertight
+        assert (r.geometry.plate_x, r.geometry.plate_y) == (want[3], want[4])
+        assert np.allclose(r.solid.extents, (want[3], want[4], 10.5),
+                           atol=0.01)
+
+    def test_alias_builds_like_its_target(self):
+        a = build_plate(printer="h2c").geometry
+        b = build_plate(printer="h2c-left").geometry
+        assert (a.plate_x, a.plate_y) == (b.plate_x, b.plate_y) == (315, 308)
+
+    def test_no_printer_is_the_unchanged_default(self):
+        r = build_plate()
+        assert (r.geometry.plate_x, r.geometry.plate_y) == (246.0, 218.0)
+        assert abs(r.solid.volume - DEFAULT_VOLUME_MM3) < TOL
+        # x1c and p1s default to the same footprint as no printer
+        assert build_plate(printer="x1c").geometry.plate_x == 246.0
+        assert build_plate(printer="x1c").geometry.plate_y == 218.0
+
+    def test_no_printer_still_caps_x_but_not_y_or_height(self):
+        with pytest.raises(ValueError, match="plate_x .* exceeds 246"):
+            build_plate(plate_x=247.0)
+        build_plate(plate_y=300.0)
+        build_plate(plate_z=20.0)
+
+    def test_explicit_size_within_limits_overrides_the_default(self):
+        r = build_plate(printer="h2s", plate_x=300.0, plate_y=250.0)
+        assert (r.geometry.plate_x, r.geometry.plate_y) == (300.0, 250.0)
+        assert r.solid.is_watertight
+
+    def test_explicit_size_may_use_the_whole_print_area(self):
+        g = build_plate(printer="a1", plate_x=256.0, plate_y=256.0).geometry
+        assert (g.plate_x, g.plate_y) == (256.0, 256.0)
+
+    def test_one_explicit_axis_keeps_the_other_default(self):
+        g = build_plate(printer="h2s", plate_x=300.0).geometry
+        assert (g.plate_x, g.plate_y) == (300.0, 308.0)
+
+    def test_printer_allows_x_past_the_no_printer_cap(self):
+        assert build_plate(printer="h2s", plate_x=340.0).geometry.plate_x \
+            == 340.0
+
+    @pytest.mark.parametrize("printer,kwargs,axis,limit", [
+        ("p1s", dict(plate_x=256.5), "plate_x", "256.0"),
+        ("x2d-right", dict(plate_x=236.0), "plate_x", "235.5"),
+        ("h2c-right", dict(plate_x=306.0), "plate_x", "305.0"),
+        ("a1", dict(plate_y=257.0), "plate_y", "256.0"),
+        ("h2s", dict(plate_y=321.0), "plate_y", "320.0"),
+        ("a1", dict(plate_z=255.0), r"height \(plate_z \+ stack_h\)", "256.0"),
+        ("h2c-left", dict(plate_z=319.0), r"height \(plate_z \+ stack_h\)",
+         "320.0"),
+    ])
+    def test_oversize_names_the_printer_and_axis(
+        self, printer, kwargs, axis, limit
+    ):
+        with pytest.raises(ValueError) as exc:
+            build_plate(printer=printer, **kwargs)
+        msg = str(exc.value)
+        assert printer in msg
+        import re
+        assert re.search(axis, msg)
+        assert limit in msg
+
+    def test_height_includes_the_ribs(self):
+        # plate_z 254.6 + stack_h 1.5 = 256.1 > 256 though plate_z alone fits
+        with pytest.raises(ValueError, match="height"):
+            build_plate(printer="a1", plate_z=254.6, side_branding=False,
+                        mag_depth=3.2)
+
+    def test_alias_error_names_the_resolved_profile(self):
+        with pytest.raises(ValueError, match="x2d-left"):
+            build_plate(printer="x2d", plate_x=257.0)
+
+    def test_none_size_is_still_rejected_with_a_printer(self):
+        with pytest.raises(ValueError, match="plate_x must be a number"):
+            build_plate(printer="a1", plate_x=None)
