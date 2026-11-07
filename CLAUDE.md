@@ -40,7 +40,7 @@ From another generator script:
 
 ```python
 from jig_plate_base import build_plate
-result = build_plate()  # or build_plate(label="...", plate_x=..., ...)
+result = build_plate()  # or build_plate(printer="h2d", label="...")
 result.solid             # trimesh.Trimesh
 result.geometry.mag_xs   # reserved zones to lay pockets out around
 ```
@@ -110,7 +110,7 @@ README's copy in `docs/images/` (unversioned names), alt text included.
 
 - Magnet bores share X positions on the front and back faces and are
   symmetric about the X centerline so plates mate either way round.
-- Plate must stay <= 246 mm in X (bed width plus purge-area clearance).
+- Plate must fit the `printer=` profile (X, Y, height); with none, X <= 246 mm.
 - Corner stacking ribs (top face) and grooves (bottom face) are positioned
   off `plate_x`/`plate_y` only, never off pocket or blank layout, so any two
   plates sharing this outer footprint stack together.
