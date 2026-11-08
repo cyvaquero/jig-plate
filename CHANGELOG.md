@@ -4,7 +4,7 @@
 |---|---|
 | **Generator (CLI)** | `jig-plate.py` |
 | **Generator (library)** | `jig_plate_base.py` (`build_plate()`) |
-| **Meshes** | `jig_plate_<version>.stl` |
+| **Meshes** | `jig_plate_<version>.stl`, or `jig_plate_<version>_<printer>.stl` with `--printer` |
 | **Latest release** | 3.1.0 |
 
 ## Versioning
