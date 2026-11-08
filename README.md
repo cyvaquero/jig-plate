@@ -181,6 +181,13 @@ And into `images/`:
 - `jig_plate_<version>_tech_detail.png` — magnet-bore and stacking-joint
   detail sheet
 
+With `--printer`, the printer's profile name (an alias is resolved, so
+`h2d` gives `h2d-left`) follows the version in every name, for example
+`jig_plate_<version>_h2s.stl`, `jig_plate_<version>_h2s_stack_coupon.stl`
+and `jig_plate_<version>_h2s_diagram.png`, and both STL headers carry it,
+so builds for different printers sit side by side instead of overwriting
+each other.
+
 Each file is written to a temporary file and then moved into place, so a
 symlink already sitting at an output path is replaced, never written
 through.
