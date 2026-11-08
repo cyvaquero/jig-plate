@@ -230,7 +230,7 @@ class TestMain:
         import trimesh
 
         plate = trimesh.load(
-            out_dir / f"jig_plate_{jig_plate_cli.VERSION}.stl")
+            out_dir / f"jig_plate_{jig_plate_cli.VERSION}_x2d-right.stl")
         assert plate.is_watertight
         assert np.allclose(plate.extents, (225.5, 244.0, 10.5), atol=0.01)
         assert "watertight: True" in capsys.readouterr().out
