@@ -34,6 +34,23 @@ never changes -- it isn't one of the three.
 
 ---
 
+## 3.1.6 — Printer name in output file names
+
+Iterative (unreleased). Without `--printer` the file names, STL headers and
+plate and coupon geometry are unchanged from 3.1.5 (triangle data
+byte-identical).
+
+### Fixed
+- Builds for different printers no longer overwrite each other. With
+  `--printer`, the printer's profile name (an alias such as `h2d` becomes
+  `h2d-left`) is added to every output file name, for example
+  `jig_plate_<version>_h2s.stl`, `jig_plate_<version>_h2s_stack_coupon.stl`
+  and `jig_plate_<version>_h2s_diagram.png`, and to both STL headers (for
+  example `Jig plate <version> | h2s | 330x308x10.5mm | base plate, no
+  pockets`). The coupon's header reads "magnet+rib wall test" rather than
+  "corner, magnet+rib wall test" in that case, so the longest name still
+  fits in the 80-byte header (#5).
+
 ## 3.1.5 — Isometric diagram legend spacing
 
 Iterative (unreleased). The plate and coupon geometry are unchanged from

@@ -65,10 +65,10 @@ why, and what was verified.
 These stay byte-for-byte identical unless a change is meant to alter them.
 Run the CLI before and after every change and report the comparison.
 
-- `output/jig_plate_<VERSION>.stl` and `output/jig_plate_<VERSION>_stack_coupon.stl`:
-  binary STL whose 80-byte header starts `Jig plate <VERSION>` and is
-  NUL-padded; both meshes report watertight. Across a version bump only the
-  filename and header may differ: compare bytes 80 onward with `cmp`.
+- `output/jig_plate_<VERSION>.stl` and `..._stack_coupon.stl`: binary STL,
+  80-byte NUL-padded header starting `Jig plate <VERSION>`; both meshes
+  watertight. A bump changes only filename and header (`cmp -i 80`). With
+  `--printer P` (alias resolved) `_<P>` joins every name, `<P> | ` the header.
 - `images/*.png`: the isometric diagram and three technical-drawing sheets.
   Compare visually; matplotlib PNGs aren't byte-stable across versions.
 - `build_plate()` return shape: `PlateResult(solid, geometry)` and the
