@@ -230,7 +230,7 @@ class TestMain:
         import trimesh
 
         plate = trimesh.load(
-            out_dir / f"jig_plate_{jig_plate_cli.VERSION}.stl")
+            out_dir / f"jig_plate_{jig_plate_cli.VERSION}_x2d-right.stl")
         assert plate.is_watertight
         assert np.allclose(plate.extents, (225.5, 244.0, 10.5), atol=0.01)
         assert "watertight: True" in capsys.readouterr().out
@@ -354,3 +354,111 @@ class TestRunAsScript:
             runpy.run_path(str(_SCRIPT), run_name="__main__")
         assert exc_info.value.code == 0
         assert "usage:" in capsys.readouterr().out
+
+
+class TestPrinterOutputNames:
+    """With --printer, every output file name and the STL headers carry the
+    canonical profile name; with no printer, names and headers are as ever."""
+
+    @pytest.fixture
+    def _redirected_dirs(self, tmp_path, monkeypatch):
+        out_dir = tmp_path / "output"
+        img_dir = tmp_path / "images"
+        monkeypatch.setattr(jig_plate_cli, "OUT_DIR", out_dir)
+        monkeypatch.setattr(jig_plate_cli, "IMG_DIR", img_dir)
+        return out_dir, img_dir
+
+    @staticmethod
+    def _names(version, stem_suffix):
+        stem = f"jig_plate_{version}{stem_suffix}"
+        stls = {f"{stem}.stl", f"{stem}_stack_coupon.stl"}
+        pngs = {f"{stem}_{v}.png"
+                for v in ("diagram", "tech_top", "tech_front", "tech_detail")}
+        return stls, pngs
+
+    def _run(self, monkeypatch, *args):
+        monkeypatch.setattr(sys, "argv", ["jig-plate.py", *args])
+        jig_plate_cli.main()
+
+    def test_printer_adds_its_name_to_every_file(self, _redirected_dirs,
+                                                 monkeypatch):
+        out_dir, img_dir = _redirected_dirs
+        self._run(monkeypatch, "--printer", "h2s")
+
+        stls, pngs = self._names(jig_plate_cli.VERSION, "_h2s")
+        assert {p.name for p in out_dir.iterdir()} == stls
+        assert {p.name for p in img_dir.iterdir()} == pngs
+
+    def test_alias_resolves_to_the_canonical_name_in_the_files(
+            self, _redirected_dirs, monkeypatch):
+        out_dir, img_dir = _redirected_dirs
+        self._run(monkeypatch, "--printer", " H2D ")
+
+        stls, pngs = self._names(jig_plate_cli.VERSION, "_h2d-left")
+        assert {p.name for p in out_dir.iterdir()} == stls
+        assert {p.name for p in img_dir.iterdir()} == pngs
+
+    def test_no_printer_names_are_unchanged(self, _redirected_dirs,
+                                            monkeypatch):
+        out_dir, img_dir = _redirected_dirs
+        self._run(monkeypatch)
+
+        stls, pngs = self._names(jig_plate_cli.VERSION, "")
+        assert {p.name for p in out_dir.iterdir()} == stls
+        assert {p.name for p in img_dir.iterdir()} == pngs
+
+    def test_builds_for_two_printers_coexist(self, _redirected_dirs,
+                                             monkeypatch):
+        out_dir, _ = _redirected_dirs
+        self._run(monkeypatch, "--printer", "a1")
+        self._run(monkeypatch, "--printer", "h2s")
+
+        assert len(list(out_dir.iterdir())) == 4
+
+    def test_headers_name_the_printer_and_the_no_printer_header_is_unchanged(
+            self, _redirected_dirs, monkeypatch):
+        out_dir, _ = _redirected_dirs
+        version = jig_plate_cli.VERSION
+        self._run(monkeypatch, "--printer", "h2c-right")
+        self._run(monkeypatch)
+
+        plate = (out_dir / f"jig_plate_{version}_h2c-right.stl"
+                 ).read_bytes()[:80]
+        coupon = (out_dir / f"jig_plate_{version}_h2c-right_stack_coupon.stl"
+                  ).read_bytes()[:80]
+        assert plate.rstrip(b"\x00").decode("ascii") == (
+            f"Jig plate {version} | h2c-right | 295x308x10.5mm | "
+            "base plate, no pockets")
+        # the longest profile name still fits whole, tail included
+        assert coupon.rstrip(b"\x00").decode("ascii").endswith(
+            "stack coupon 46x20x10.5mm | magnet+rib wall test")
+        assert b"h2c-right" in coupon
+
+        plain = (out_dir / f"jig_plate_{version}.stl").read_bytes()[:80]
+        assert plain.rstrip(b"\x00").decode("ascii") == (
+            f"Jig plate {version} | 246x218x10.5mm | base plate, no pockets")
+        plain_c = (out_dir / f"jig_plate_{version}_stack_coupon.stl"
+                   ).read_bytes()[:80]
+        assert plain_c.rstrip(b"\x00").decode("ascii") == (
+            f"Jig plate {version} | stack coupon 46x20x10.5mm | "
+            "corner, magnet+rib wall test")
+
+    @pytest.mark.parametrize("printer", ["x2d-right", "h2c-right", "h2d-left"])
+    def test_headers_fit_in_80_bytes_without_losing_the_printer(
+            self, _redirected_dirs, monkeypatch, printer):
+        out_dir, _ = _redirected_dirs
+        version = jig_plate_cli.VERSION
+        self._run(monkeypatch, "--printer", printer, "--label", "W" * 6)
+
+        for name in (f"jig_plate_{version}_{printer}.stl",
+                     f"jig_plate_{version}_{printer}_stack_coupon.stl"):
+            data = (out_dir / name).read_bytes()
+            header = data[:80].rstrip(b"\x00").decode("ascii")
+            assert f"| {printer} |" in header
+            # file is intact: the 80-byte header did not shift the body
+            n_tri = int.from_bytes(data[80:84], "little")
+            assert len(data) == 84 + 50 * n_tri
+
+    def test_output_stem_without_a_printer_is_the_bare_version(self):
+        assert jig_plate_cli._output_stem() == (
+            f"jig_plate_{jig_plate_cli.VERSION}")

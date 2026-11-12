@@ -841,6 +841,20 @@ Changelog
          --printer; both meshes watertight; diagrams viewed for the
          default, h2s, x2d-right and a1; new tests fail on the old key;
          full test suite passes.
+  3.1.6  printer name in output names (#5): with --printer, the canonical
+         profile name (aliases resolved: h2d gives h2d-left) is added to
+         every file name, as jig_plate_<VERSION>_<printer>.stl,
+         _<printer>_stack_coupon.stl and _<printer>_diagram.png (and the
+         three tech sheets), and to both STL headers ("Jig plate 3.1.6 |
+         h2s | 330x308x10.5mm | ..."), so builds for different printers no
+         longer overwrite each other. The coupon header drops "corner, "
+         with a printer so the longest name still fits 80 bytes. No
+         printer: names and headers unchanged. Verified: STL triangle data
+         (bytes 80+) byte-identical to 3.1.5 with no --printer, and the
+         no-printer header differs only in the version; both meshes
+         watertight; two printers' builds coexist; new tests fail without
+         the stem, the header tag or alias resolution; full test suite
+         passes.
 """
 import argparse
 import io
@@ -858,7 +872,7 @@ from matplotlib.patches import FancyBboxPatch
 from matplotlib.colors import to_rgba as _to_rgba
 from matplotlib.transforms import Affine2D, ScaledTranslation
 
-from jig_plate_base import build_plate, bx, printer_names
+from jig_plate_base import build_plate, bx, get_printer_profile, printer_names
 
 
 def _faint(color, alpha):
@@ -875,7 +889,7 @@ def _solid(color, alpha):
     fg, bg = _to_rgba(color), _to_rgba(BG)
     return tuple(alpha * c + (1 - alpha) * b for c, b in zip(fg[:3], bg[:3])) + (1.0,)
 
-VERSION = "3.1.5"
+VERSION = "3.1.6"
 OUT_DIR = Path(__file__).resolve().parent / "output"
 IMG_DIR = Path(__file__).resolve().parent / "images"
 
@@ -1837,6 +1851,16 @@ def _tech_detail(out_path, geom, magnet_d=MAGNET_D, magnet_len=MAGNET_LEN):
     print("wrote", out_path)
 
 
+def _output_stem(printer_name=None):
+    """Filename stem shared by every output file: `jig_plate_<VERSION>`,
+    plus `_<printer>` (the canonical profile name, so an alias like h2d
+    gives h2d-left) when a printer was chosen, so builds for different
+    printers sit side by side instead of overwriting each other. With no
+    printer it is exactly `jig_plate_<VERSION>`."""
+    stem = f"jig_plate_{VERSION}"
+    return stem if printer_name is None else f"{stem}_{printer_name}"
+
+
 def _mesh_summary(name, mesh, volume_digits, bbox_digits):
     """One labeled console line per mesh, the same shape for both:
     `plate        | watertight: True | volume cm3: 481.5 | bbox: [...] | faces: N`
@@ -1869,8 +1893,9 @@ def main():
              "per axis) and rejects a plate that does not fit it. "
              "Dual-nozzle printers have one profile per nozzle; a bare "
              "x2d, h2d or h2c means the larger (left) nozzle. Only size "
-             "is checked, not bed position. Default: none, a 246 x 218 mm "
-             "plate with X capped at 246 mm.",
+             "is checked, not bed position. The printer's name is added to "
+             "the output file names and the STL headers. Default: none, a "
+             "246 x 218 mm plate with X capped at 246 mm.",
     )
     args = parser.parse_args()
 
@@ -1880,14 +1905,19 @@ def main():
         parser.error(str(e))
     solid = result.solid
     geom = result.geometry
+    # canonical profile name (aliases resolved), or None with no printer
+    printer_name = (None if args.printer is None
+                    else get_printer_profile(args.printer).name)
+    stem = _output_stem(printer_name)
+    tag = "" if printer_name is None else f"{printer_name} | "
 
     print(_mesh_summary("plate", solid, 1, 3))
 
     OUT_DIR.mkdir(exist_ok=True)
-    OUT = OUT_DIR / f"jig_plate_{VERSION}.stl"
+    OUT = OUT_DIR / f"{stem}.stl"
     _export_stl(
         solid, OUT,
-        f"Jig plate {VERSION} | "
+        f"Jig plate {VERSION} | {tag}"
         f"{geom.plate_x:.0f}x{geom.plate_y:.0f}x{geom.plate_z + geom.stack_h:.1f}mm | "
         f"base plate, no pockets",
     )
@@ -1906,7 +1936,7 @@ def main():
     # corner, toward the plate's center), re-check that both stay fully
     # inside SC_X0/SC_Y1 below; a smaller inset only pulls a feature
     # closer to the corner, deeper inside the window, not out of it.
-    STACK_COUPON = OUT_DIR / f"jig_plate_{VERSION}_stack_coupon.stl"
+    STACK_COUPON = OUT_DIR / f"{stem}_stack_coupon.stl"
     SC_X0, SC_Y0, SC_Y1 = geom.plate_x - 46.0, 0.0, 20.0
     stack_coupon = trimesh.boolean.intersection(
         [solid, bx(SC_X0, SC_Y0, -1, geom.plate_x, SC_Y1, geom.plate_z + geom.stack_h + 1)],
@@ -1914,9 +1944,12 @@ def main():
     )
     _export_stl(
         stack_coupon, STACK_COUPON,
-        f"Jig plate {VERSION} | "
+        f"Jig plate {VERSION} | {tag}"
         f"stack coupon {geom.plate_x - SC_X0:g}x{SC_Y1 - SC_Y0:g}"
-        f"x{geom.plate_z + geom.stack_h:.1f}mm | corner, magnet+rib wall test",
+        f"x{geom.plate_z + geom.stack_h:.1f}mm | "
+        # "corner, " is dropped with a printer so the longest name still
+        # fits the 80-byte header without cutting the tail off
+        + ("magnet+rib wall test" if tag else "corner, magnet+rib wall test"),
     )
     print("wrote", STACK_COUPON)
     failed = [
@@ -1926,10 +1959,10 @@ def main():
     print(_mesh_summary("stack coupon", stack_coupon, 2, 2))
 
     IMG_DIR.mkdir(exist_ok=True)
-    _plate_diagram(IMG_DIR / f"jig_plate_{VERSION}_diagram.png", geom)
-    _tech_top_plan(IMG_DIR / f"jig_plate_{VERSION}_tech_top.png", geom)
-    _tech_front_elevation(IMG_DIR / f"jig_plate_{VERSION}_tech_front.png", geom)
-    _tech_detail(IMG_DIR / f"jig_plate_{VERSION}_tech_detail.png", geom)
+    _plate_diagram(IMG_DIR / f"{stem}_diagram.png", geom)
+    _tech_top_plan(IMG_DIR / f"{stem}_tech_top.png", geom)
+    _tech_front_elevation(IMG_DIR / f"{stem}_tech_front.png", geom)
+    _tech_detail(IMG_DIR / f"{stem}_tech_detail.png", geom)
 
     # the files above are still written so the broken mesh can be inspected,
     # but a non-watertight mesh must not pass for a good build
