@@ -31,6 +31,87 @@ _MIN_WALL = 0.8  # ~2 perimeters at a common 0.4mm nozzle
 _MIN_DEBOSS_D = 0.2   # one layer at a common 0.2mm layer height
 _MIN_STACK_PLAY = 0.1  # 0 is a press fit that won't seat on FDM prints
 
+# with no printer selected, plate_x is capped here (the 256 mm bed of the
+# X1C/P1S class less purge-area clearance); plate_y and the height are
+# not capped
+_NO_PRINTER_MAX_X = 246.0
+_DEFAULT_PLATE_X = 246.0
+_DEFAULT_PLATE_Y = 218.0
+
+
+class _Auto:
+    """Marks plate_x/plate_y as not given, so a printer can supply them
+    (None stays an invalid value, rejected like any non-number)."""
+    def __repr__(self):
+        return "<printer default>"
+
+
+_AUTO = _Auto()
+
+
+@dataclasses.dataclass(frozen=True)
+class PrinterProfile:
+    """One print area of a Bambu Lab printer (single-nozzle, mm).
+
+    `max_x`/`max_y`/`max_z` are the print area a plate must fit within;
+    `default_x`/`default_y` are the plate size chosen when the profile is
+    picked with no explicit size: the largest rectangle clear of the
+    printer's bed keep-outs (purge and calibration lines, the X1C/P1S
+    cutter zone) less 10 mm on each axis. No prime-tower area is
+    reserved, and only the size is checked, not where the plate sits on
+    the bed.
+    """
+    name: str
+    max_x: float
+    max_y: float
+    max_z: float
+    default_x: float
+    default_y: float
+
+
+def _profiles(*rows):
+    return {r[0]: PrinterProfile(*r) for r in rows}
+
+
+# Dual-nozzle printers (X2D, H2D, H2C) have one profile per nozzle.
+PRINTER_PROFILES = _profiles(
+    ("a1", 256.0, 256.0, 256.0, 246.0, 244.0),
+    ("p1s", 256.0, 256.0, 256.0, 246.0, 218.0),
+    ("p2s", 256.0, 256.0, 256.0, 246.0, 244.0),
+    ("x1c", 256.0, 256.0, 256.0, 246.0, 218.0),
+    ("x2d-left", 256.0, 256.0, 260.0, 246.0, 244.0),
+    ("x2d-right", 235.5, 256.0, 256.0, 225.5, 244.0),
+    ("h2s", 340.0, 320.0, 340.0, 330.0, 308.0),
+    ("h2d-left", 325.0, 320.0, 325.0, 315.0, 308.0),
+    ("h2d-right", 325.0, 320.0, 325.0, 315.0, 308.0),
+    ("h2c-left", 325.0, 320.0, 320.0, 315.0, 308.0),
+    ("h2c-right", 305.0, 320.0, 325.0, 295.0, 308.0),
+    ("h3c", 330.0, 320.0, 325.0, 320.0, 308.0),
+)
+
+# A bare dual-nozzle name picks the nozzle with the larger print area
+# (the left one; for the H2D the two are equal).
+PRINTER_ALIASES = {"x2d": "x2d-left", "h2d": "h2d-left", "h2c": "h2c-left"}
+
+
+def printer_names():
+    """Every accepted `printer=` name: the profiles, then the aliases."""
+    return tuple(PRINTER_PROFILES) + tuple(PRINTER_ALIASES)
+
+
+def get_printer_profile(printer):
+    """The `PrinterProfile` for a printer name (case-insensitive; a bare
+    dual-nozzle name resolves to its larger nozzle). `ValueError` for an
+    unknown name or a non-string."""
+    key = printer.strip().lower() if isinstance(printer, str) else None
+    key = PRINTER_ALIASES.get(key, key)
+    if key not in PRINTER_PROFILES:
+        raise ValueError(
+            f"unknown printer {printer!r}; choose one of: "
+            + ", ".join(printer_names())
+        )
+    return PRINTER_PROFILES[key]
+
 
 @dataclasses.dataclass(frozen=True)
 class PlateGeometry:
@@ -270,7 +351,8 @@ def _native(value):
 
 def build_plate(
     *,
-    plate_x=246.0, plate_y=218.0, plate_z=9.0,
+    printer=None,
+    plate_x=_AUTO, plate_y=_AUTO, plate_z=9.0,
     front_margin=10.0, back_margin=10.0,
     mag_d=6.1, mag_depth=3.2, mag_count_x=4, mag_inset_x=30.75,
     bottom_mag_inset_x=12.0,
@@ -315,10 +397,29 @@ def build_plate(
     check or side-face keep-out box. The top-face branding is unaffected.
     A non-bool value raises `ValueError`.
 
+    `printer` (default None) names a Bambu Lab print area from
+    `PRINTER_PROFILES` (a1, p1s, p2s, x1c, h2s, h3c, and one profile per
+    nozzle for the dual-nozzle x2d, h2d and h2c: `h2d-left`, `h2d-right`;
+    a bare `x2d`, `h2d` or `h2c` means the larger nozzle). Picking one
+    sets the default `plate_x`/`plate_y` to that profile's default size
+    (the largest keep-out-clear rectangle less 10 mm per axis); an
+    explicit `plate_x`/`plate_y` overrides it. Either way `plate_x`,
+    `plate_y` and the full height (`plate_z + stack_h`, ribs included)
+    must fit the profile's print area, or `ValueError` names the printer
+    and the axis. Only size is checked, not bed position, and no prime
+    tower area is reserved. With no printer the defaults are 246 x 218,
+    `plate_x` is capped at 246 mm and `plate_y` and the height are not
+    capped. An unknown name raises `ValueError`.
+
     Returns a `PlateResult` (`.solid`: trimesh.Trimesh, `.geometry`:
     PlateGeometry). Pure -- no file I/O, no argv, no printing.
     """
     # ---- input validation -----------------------------------------
+    profile = None if printer is None else get_printer_profile(printer)
+    if plate_x is _AUTO:
+        plate_x = _DEFAULT_PLATE_X if profile is None else profile.default_x
+    if plate_y is _AUTO:
+        plate_y = _DEFAULT_PLATE_Y if profile is None else profile.default_y
     # Type/finiteness/sign checks first (a bad type or a nonsensical
     # negative/zero size fails fast, with its own clear message, rather
     # than surfacing as a collision against something else below).
@@ -429,11 +530,25 @@ def build_plate(
                 f"{_name} ({_value}) must be less than half of plate_x "
                 f"({plate_x / 2})"
             )
-    if plate_x > 246.0:
-        raise ValueError(
-            f"plate_x ({plate_x}) exceeds 246 mm (bed width + purge-area "
-            "clearance -- see CLAUDE.md)"
-        )
+    if profile is None:
+        if plate_x > _NO_PRINTER_MAX_X:
+            raise ValueError(
+                f"plate_x ({plate_x}) exceeds 246 mm (bed width + "
+                "purge-area clearance -- see CLAUDE.md); pass printer= to "
+                "size the plate to a specific printer"
+            )
+    else:
+        for _axis, _size, _max in (
+            ("plate_x", plate_x, profile.max_x),
+            ("plate_y", plate_y, profile.max_y),
+            ("height (plate_z + stack_h)", plate_z + stack_h,
+             profile.max_z),
+        ):
+            if _size > _max:
+                raise ValueError(
+                    f"{_axis} ({_size}) exceeds the {profile.name} print "
+                    f"area limit of {_max} mm"
+                )
 
     mag_xs = tuple(
         mag_inset_x + i * (plate_x - 2 * mag_inset_x) / (mag_count_x - 1)

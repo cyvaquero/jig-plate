@@ -17,6 +17,7 @@ import re
 import sys
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 _SCRIPT = Path(__file__).resolve().parent.parent / "jig-plate.py"
@@ -216,6 +217,46 @@ class TestMain:
         err = capsys.readouterr().err
         assert "usage:" in err
         assert re.search(r"label.*empty", err, re.IGNORECASE)
+
+    def test_printer_option_sizes_the_plate_and_stays_watertight(
+        self, _redirected_dirs, monkeypatch, capsys
+    ):
+        out_dir, _ = _redirected_dirs
+        monkeypatch.setattr(
+            sys, "argv", ["jig-plate.py", "--printer", "x2d-right"])
+
+        jig_plate_cli.main()
+
+        import trimesh
+
+        plate = trimesh.load(
+            out_dir / f"jig_plate_{jig_plate_cli.VERSION}.stl")
+        assert plate.is_watertight
+        assert np.allclose(plate.extents, (225.5, 244.0, 10.5), atol=0.01)
+        assert "watertight: True" in capsys.readouterr().out
+
+    def test_unknown_printer_exits_like_an_argparse_error(
+        self, _redirected_dirs, monkeypatch, capsys
+    ):
+        monkeypatch.setattr(sys, "argv", ["jig-plate.py", "--printer", "x9"])
+
+        with pytest.raises(SystemExit) as exc_info:
+            jig_plate_cli.main()
+
+        assert exc_info.value.code == 2
+        err = capsys.readouterr().err
+        assert "usage:" in err
+        assert "unknown printer 'x9'" in err
+
+    def test_help_lists_every_printer(self, monkeypatch, capsys):
+        from jig_plate_base import printer_names
+
+        monkeypatch.setattr(sys, "argv", ["jig-plate.py", "--help"])
+        with pytest.raises(SystemExit):
+            jig_plate_cli.main()
+        out = " ".join(capsys.readouterr().out.split())
+        for name in printer_names():
+            assert name in out
 
     @pytest.mark.parametrize("broken", ["plate", "stack coupon"])
     def test_non_watertight_mesh_still_writes_files_but_exits_nonzero(

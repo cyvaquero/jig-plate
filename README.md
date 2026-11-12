@@ -44,7 +44,7 @@ below.
 
 | Part | Size |
 |---|---|
-| **Plate** | 246 × 218 × 9 mm (10.5 mm at the corner stacking ribs) |
+| **Plate** | 246 × 218 × 9 mm by default (10.5 mm at the corner stacking ribs); see `--printer` for other sizes |
 
 ## Drawings
 
@@ -128,6 +128,41 @@ included and is not parameterized):
 ```bash
 .venv/bin/python jig-plate.py --label "Card Jig"
 ```
+
+Optionally size the plate for a Bambu Lab printer:
+
+```bash
+.venv/bin/python jig-plate.py --printer h2d-right
+```
+
+Profiles: `a1`, `p1s`, `p2s`, `x1c`, `h2s`, `h3c`, and one per nozzle for
+the dual-nozzle `x2d-left`, `x2d-right`, `h2d-left`, `h2d-right`,
+`h2c-left` and `h2c-right`. A bare `x2d`, `h2d` or `h2c` means the larger
+(left) nozzle. Picking a printer sets the default plate size to the largest
+rectangle clear of that printer's bed keep-outs (purge and calibration
+lines, the X1C/P1S front-left cutter zone) less 10 mm on each axis, with
+no prime-tower area reserved:
+
+| Printer | Default plate (X × Y mm) | Print area limit (X × Y × height mm) |
+|---|---|---|
+| `x1c`, `p1s` | 246 × 218 | 256 × 256 × 256 |
+| `a1`, `p2s` | 246 × 244 | 256 × 256 × 256 |
+| `x2d-left` | 246 × 244 | 256 × 256 × 260 |
+| `x2d-right` | 225.5 × 244 | 235.5 × 256 × 256 |
+| `h2s` | 330 × 308 | 340 × 320 × 340 |
+| `h2d-left`, `h2d-right` | 315 × 308 | 325 × 320 × 325 |
+| `h2c-left` | 315 × 308 | 325 × 320 × 320 |
+| `h2c-right` | 295 × 308 | 305 × 320 × 325 |
+| `h3c` | 320 × 308 | 330 × 320 × 325 |
+
+The figures are single-nozzle print areas, and only the plate's size is
+checked, not where it sits on the bed. In the library, pass
+`build_plate(printer="h2s")`; an explicit `plate_x`/`plate_y` overrides the
+default but, like the height (plate plus ribs), must fit the printer's
+limits, or `ValueError` names the printer and the axis. With no printer the
+plate is 246 × 218 mm, X is capped at 246 mm, and Y and height are not
+capped. Plates built for different printers have different footprints and
+only stack with plates of the same footprint.
 
 Generates into `output/`:
 

@@ -34,6 +34,34 @@ never changes -- it isn't one of the three.
 
 ---
 
+## 3.1.4 — Per-printer profiles
+
+Iterative (unreleased). Without `--printer` the plate and coupon geometry
+are unchanged from 3.1.3 (triangle data byte-identical).
+
+### Added
+- `--printer NAME` and `build_plate(printer=...)` select a Bambu Lab print
+  area: `a1`, `p1s`, `p2s`, `x1c`, `h2s`, `h3c`, and one profile per nozzle
+  for `x2d`, `h2d` and `h2c` (`h2d-left`, `h2d-right`, and so on; a bare
+  `x2d`, `h2d` or `h2c` means the larger, left nozzle). A printer sets the
+  default plate size to its largest keep-out-clear rectangle less 10 mm per
+  axis (for example 330 × 308 for the H2S), and `plate_x`, `plate_y` and
+  the full height (ribs included) are checked against its print area; a
+  plate that does not fit raises `ValueError` naming the printer and the
+  axis. An explicit `plate_x`/`plate_y` overrides the default within those
+  limits. An unknown printer name is rejected (#2).
+- `PRINTER_PROFILES`, `PRINTER_ALIASES`, `printer_names()` and
+  `get_printer_profile()` in `jig_plate_base.py`.
+
+### Changed
+- With no printer, behavior is as before: 246 × 218 mm, `plate_x` capped at
+  246 mm, no cap on `plate_y` or height. The `plate_x` error now also
+  points to `printer=`.
+
+### Note
+- The printer figures are not yet checked against Bambu Lab's official
+  spec pages (#2).
+
 ## 3.1.3 — MIT license
 
 Iterative (unreleased). No code change: the plate and coupon geometry are
