@@ -818,6 +818,18 @@ Changelog
          license" line. No code change. Verified: STL triangle data
          (bytes 80+) byte-identical to 3.1.2; both meshes watertight; full
          test suite passes (206).
+  3.1.4  per-printer profiles (#2): build_plate(printer=...) and a new
+         --printer CLI option select a Bambu Lab print area (a1, p1s, p2s,
+         x1c, h2s, h3c, and a left/right profile for each of x2d, h2d,
+         h2c; a bare dual-nozzle name means the larger nozzle). A printer
+         sets the default plate size (largest keep-out-clear rectangle
+         less 10 mm per axis) and plate_x, plate_y and the full height
+         are checked against it, naming printer and axis. No printer
+         keeps the 246 x 218 default and the 246 mm X cap. The printer
+         figures are from search-result quotes and still need a check
+         against Bambu Lab's official spec pages. Verified: STL triangle
+         data (bytes 80+) byte-identical to 3.1.3 with no --printer; both
+         meshes watertight for every profile; full test suite passes.
 """
 import argparse
 import io
@@ -834,7 +846,7 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import FancyBboxPatch
 from matplotlib.colors import to_rgba as _to_rgba
 
-from jig_plate_base import build_plate, bx
+from jig_plate_base import build_plate, bx, printer_names
 
 
 def _faint(color, alpha):
@@ -851,7 +863,7 @@ def _solid(color, alpha):
     fg, bg = _to_rgba(color), _to_rgba(BG)
     return tuple(alpha * c + (1 - alpha) * b for c, b in zip(fg[:3], bg[:3])) + (1.0,)
 
-VERSION = "3.1.3"
+VERSION = "3.1.4"
 OUT_DIR = Path(__file__).resolve().parent / "output"
 IMG_DIR = Path(__file__).resolve().parent / "images"
 
@@ -1804,10 +1816,22 @@ def main():
              'the logo mark (the logo itself is not parameterized). '
              'Default: "Jig Plate".',
     )
+    parser.add_argument(
+        "--printer", default=None, metavar="NAME",
+        help="Bambu Lab printer to size the plate for: "
+             + ", ".join(printer_names())
+             + ". Sets the default plate size to that printer's usable "
+             "print area (the largest keep-out-clear rectangle less 10 mm "
+             "per axis) and rejects a plate that does not fit it. "
+             "Dual-nozzle printers have one profile per nozzle; a bare "
+             "x2d, h2d or h2c means the larger (left) nozzle. Only size "
+             "is checked, not bed position. Default: none, a 246 x 218 mm "
+             "plate with X capped at 246 mm.",
+    )
     args = parser.parse_args()
 
     try:
-        result = build_plate(label=args.label)
+        result = build_plate(label=args.label, printer=args.printer)
     except ValueError as e:
         parser.error(str(e))
     solid = result.solid
