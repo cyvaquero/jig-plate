@@ -830,6 +830,17 @@ Changelog
          against Bambu Lab's official spec pages. Verified: STL triangle
          data (bytes 80+) byte-identical to 3.1.3 with no --printer; both
          meshes watertight for every profile; full test suite passes.
+  3.1.5  isometric diagram legend spacing (#4): the plate / magnets /
+         stacking rib key was laid out in data units, so at the smaller
+         scale a larger printer plate gets, its entries crowded and
+         "magnets" ran into the next swatch. The key is now laid out in
+         points from the bottom of the axes, with swatch size, gaps and
+         label widths fixed, so it reads the same at every plate size;
+         the "Vertical scale" note moved to sit under it. Verified: STL
+         triangle data (bytes 80+) byte-identical to 3.1.4 with no
+         --printer; both meshes watertight; diagrams viewed for the
+         default, h2s, x2d-right and a1; new tests fail on the old key;
+         full test suite passes.
 """
 import argparse
 import io
@@ -845,6 +856,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.patches import FancyBboxPatch
 from matplotlib.colors import to_rgba as _to_rgba
+from matplotlib.transforms import Affine2D, ScaledTranslation
 
 from jig_plate_base import build_plate, bx, printer_names
 
@@ -863,7 +875,7 @@ def _solid(color, alpha):
     fg, bg = _to_rgba(color), _to_rgba(BG)
     return tuple(alpha * c + (1 - alpha) * b for c, b in zip(fg[:3], bg[:3])) + (1.0,)
 
-VERSION = "3.1.4"
+VERSION = "3.1.5"
 OUT_DIR = Path(__file__).resolve().parent / "output"
 IMG_DIR = Path(__file__).resolve().parent / "images"
 
@@ -981,8 +993,10 @@ def leader(ax, anchor, text_pos, label, ha="left", dashed=True):
 def add_key(ax, items, y_pos=None, below_pt=None):
     """Draw a key of (label, color) swatches.
 
-    Default (y_pos, in data units): one centered row of color swatches, as
-    on the isometric overview.
+    Default: one centered row of color swatches, as on the isometric
+    overview. It is laid out in points from the axes' bottom edge (`y_pos`
+    is the row's center height above it, default ROW_KEY_Y_PT), so spacing,
+    swatch and text size do not change with the drawing's data scale.
 
     With below_pt: a column of feature entries under the axes, laid out in
     points so it reads the same whatever the drawing's scale. Each item is
@@ -994,17 +1008,46 @@ def add_key(ax, items, y_pos=None, below_pt=None):
     if below_pt is not None:
         _add_point_key(ax, items, below_pt)
         return
-    total_w = sum(len(label) * 5.5 + 22 for label, *_ in items)
-    x = -total_w / 2
+    fig = ax.figure
+    ax.apply_aspect()
+    renderer = fig.canvas.get_renderer()
+    y = ROW_KEY_Y_PT if y_pos is None else y_pos
+    # points, origin at the axes' bottom-center; the origin is looked up
+    # through transAxes at draw time, so the row moves with the axes when
+    # bbox_inches="tight" shifts the figure
+    to_px = (Affine2D().scale(1 / 72) + fig.dpi_scale_trans
+             + ScaledTranslation(0.5, 0, ax.transAxes))
+    entries = []
     for label, color, *_ in items:
         # alpha baked into the fill only; the MUTED outline stays opaque so
         # the swatch edge reaches 3:1 against BG
-        ax.add_patch(FancyBboxPatch((x, y_pos - 5), 11, 11,
-                     boxstyle="round,pad=1", fc=_faint(color, 0.7),
-                     ec=MUTED, lw=0.6, zorder=5))
-        ax.text(x + 16, y_pos + 0.5, label, fontsize=7.5,
-                color=MUTED, va="center", fontfamily="sans-serif", zorder=5)
-        x += len(label) * 5.5 + 30
+        patch = FancyBboxPatch((0, y - ROW_KEY_SWATCH_PT / 2),
+                               ROW_KEY_SWATCH_PT, ROW_KEY_SWATCH_PT,
+                               boxstyle="round,pad=1", fc=_faint(color, 0.7),
+                               ec=MUTED, lw=0.6, zorder=5, transform=to_px,
+                               clip_on=False)
+        text = ax.text(0, y, label, fontsize=7.5, color=MUTED, va="center",
+                       ha="left", fontfamily="sans-serif", zorder=5,
+                       transform=to_px)
+        ax.add_patch(patch)
+        w_pt = text.get_window_extent(renderer).width * 72 / fig.dpi
+        entries.append((patch, text, w_pt))
+    # swatch + gap + label, with a fixed gap between entries
+    widths = [ROW_KEY_SWATCH_PT + 2 + ROW_KEY_TEXT_GAP_PT + w
+              for *_, w in entries]
+    x = -(sum(widths) + ROW_KEY_ENTRY_GAP_PT * (len(widths) - 1)) / 2
+    for (patch, text, _), w in zip(entries, widths):
+        patch.set_x(x + 1)
+        text.set_position((x + 2 + ROW_KEY_SWATCH_PT + ROW_KEY_TEXT_GAP_PT, y))
+        x += w + ROW_KEY_ENTRY_GAP_PT
+
+
+# isometric overview key: center height above the axes bottom, swatch size,
+# swatch-to-label gap and entry-to-entry gap, all in points
+ROW_KEY_Y_PT = 18.0
+ROW_KEY_SWATCH_PT = 9.0
+ROW_KEY_TEXT_GAP_PT = 5.0
+ROW_KEY_ENTRY_GAP_PT = 16.0
 
 
 KEY_ROW_PT = 13.0
@@ -1014,7 +1057,6 @@ KEY_SWATCH_H_PT = 9.0
 
 def _add_point_key(ax, items, below_pt):
     from matplotlib.patches import Circle, Rectangle
-    from matplotlib.transforms import Affine2D, ScaledTranslation
     fig = ax.figure
     ax.apply_aspect()
     # points -> display pixels, origin at the axes' lower-left corner; the
@@ -1206,18 +1248,20 @@ def _plate_diagram(out_path, geom):
            "Corner stacking rib A\n(groove on underside)")
     _corner_rib_inset(ax, geom, S)
 
-    ax.text(0.01, 0.01,
-            f"Vertical scale ×{ISO_Z_EXAGGERATION}: plate thickness and "
-            "bore heights are exaggerated; X and Y are to scale",
-            transform=ax.transAxes, fontsize=7.5, ha="left", va="bottom",
-            color=MUTED, fontfamily="sans-serif", fontstyle="italic")
-
-    add_key(ax, [
-        ("plate", SHAPE), ("magnets", VIOLET), ("stacking rib", AMBER),
-    ], ax.get_ylim()[0] + 15)
+    # sits 1 pt above the axes' bottom edge, under the key row (which is
+    # centered at ROW_KEY_Y_PT) and clear of the plate's lowest corner
+    ax.annotate(
+        f"Vertical scale ×{ISO_Z_EXAGGERATION}: plate thickness and "
+        "bore heights are exaggerated; X and Y are to scale",
+        xy=(0.01, 0), xycoords="axes fraction", xytext=(0, 1),
+        textcoords="offset points", fontsize=7.5, ha="left", va="bottom",
+        color=MUTED, fontfamily="sans-serif", fontstyle="italic")
 
     ax.autoscale_view()
     ax.margins(0.08)
+    add_key(ax, [
+        ("plate", SHAPE), ("magnets", VIOLET), ("stacking rib", AMBER),
+    ])
     _save_png(fig, out_path, dpi=200, bbox_inches="tight", pad_inches=0.3,
                 facecolor=BG)
     plt.close(fig)
