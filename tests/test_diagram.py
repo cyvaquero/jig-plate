@@ -60,3 +60,56 @@ def test_no_two_leaders_cross(iso_axes):
     crossings = [(a, b) for i, (a, sa) in enumerate(segs)
                  for b, sb in segs[i + 1:] if _intersect(sa, sb)]
     assert crossings == []
+
+
+# ---- bottom legend: laid out in points, not in the plot's data scale ----
+KEY_LABELS = ("plate", "magnets", "stacking rib")
+KEY_PRINTERS = (None, "a1", "h2s", "x2d-right", "h2c-right")
+
+
+def _key_boxes(printer, tmp_path):
+    """Window-space extents (points) of the legend's swatches and labels."""
+    captured = []
+    real_close = cli.plt.close
+    cli.plt.close = lambda fig=None: (captured.append(fig), real_close(fig))
+    try:
+        cli._plate_diagram(tmp_path / "d.png",
+                           build_plate(printer=printer).geometry)
+    finally:
+        cli.plt.close = real_close
+    fig = captured[0]
+    fig.canvas.draw()
+    ax = fig.axes[0]
+    to_pt = 72 / fig.dpi
+    texts = {t.get_text(): t for t in ax.texts if t.get_text() in KEY_LABELS}
+    swatches = [p for p in ax.patches
+                if isinstance(p, cli.FancyBboxPatch)]
+    assert sorted(texts) == sorted(KEY_LABELS) and len(swatches) == 3
+    # entries in drawing order: swatch then its label, left to right
+    swatches.sort(key=lambda p: p.get_window_extent().x0)
+    out = []
+    for label, patch in zip(KEY_LABELS, swatches):
+        for artist in (patch, texts[label]):
+            bb = artist.get_window_extent()
+            out.append((bb.x0 * to_pt, bb.x1 * to_pt, bb.y0 * to_pt,
+                        bb.y1 * to_pt))
+    return out
+
+
+@pytest.mark.parametrize("printer", KEY_PRINTERS)
+def test_legend_entries_do_not_overlap_at_any_plate_size(printer, tmp_path):
+    boxes = _key_boxes(printer, tmp_path)
+    for (_, x1, *_), (nx0, *_) in zip(boxes, boxes[1:]):
+        # consecutive swatch/label/swatch/... boxes, left to right, with a
+        # clear gap between each (the old data-unit layout crossed them)
+        assert nx0 - x1 >= 3.0
+
+
+def test_legend_spacing_is_the_same_in_points_at_every_plate_size(tmp_path):
+    def gaps(printer):
+        boxes = _key_boxes(printer, tmp_path)
+        return [round(nx0 - x1, 1)
+                for (_, x1, *_), (nx0, *_) in zip(boxes, boxes[1:])]
+    reference = gaps(None)
+    for printer in KEY_PRINTERS[1:]:
+        assert gaps(printer) == reference

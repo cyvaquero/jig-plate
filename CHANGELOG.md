@@ -34,6 +34,18 @@ never changes -- it isn't one of the three.
 
 ---
 
+## 3.1.5 — Isometric diagram legend spacing
+
+Iterative (unreleased). The plate and coupon geometry are unchanged from
+3.1.4 (triangle data byte-identical); only the isometric diagram's legend
+and its footnote move.
+
+### Fixed
+- The isometric diagram's legend (plate, magnets, stacking rib) no longer
+  runs together on larger printer plates. It is now laid out at a fixed
+  size and spacing, whatever the plate size, and the "Vertical scale" note
+  sits just below it (#4).
+
 ## 3.1.4 — Per-printer profiles
 
 Iterative (unreleased). Without `--printer` the plate and coupon geometry
