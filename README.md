@@ -235,4 +235,5 @@ and drives output filenames and the 80-byte binary STL header. See
 
 ## License
 
-No license file is included. All rights reserved unless otherwise stated.
+Released under the [MIT License](LICENSE). The STL files and drawings the
+script generates are yours to use under the same terms.
