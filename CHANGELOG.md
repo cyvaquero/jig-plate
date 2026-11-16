@@ -26,6 +26,10 @@ the major or minor version (at its merge into `main`), the iterative
 entries it covers are squashed into that release's section; git history
 keeps the originals.
 
+Issue numbers in entries before 3.1.4 refer to the project's earlier,
+non-public tracker, so they don't match this repository's issues. From
+3.1.4 on, they refer to this repository.
+
 Each version's number appears in three places and they are kept in sync: the
 `VERSION` constant in `jig-plate.py` (also mirrored in `pyproject.toml`),
 the mesh filenames, and the 80-byte binary STL header of each mesh (readable
@@ -33,6 +37,16 @@ with `head -c 80 file.stl`). The generator's own filename (`jig-plate.py`)
 never changes -- it isn't one of the three.
 
 ---
+
+## 3.1.7 — Where older issue numbers point
+
+Iterative (unreleased). Docs only: the plate and coupon geometry are
+unchanged from 3.1.6 (triangle data byte-identical).
+
+### Fixed
+- The CHANGELOG and the generator's docstring now say that issue numbers
+  in entries before 3.1.4 refer to the project's earlier, non-public
+  tracker, so they aren't mistaken for this repository's issues (#11).
 
 ## 3.1.6 — Printer name in output file names
 
