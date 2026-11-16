@@ -5,7 +5,7 @@
 | **Generator (CLI)** | `jig-plate.py` |
 | **Generator (library)** | `jig_plate_base.py` (`build_plate()`) |
 | **Meshes** | `jig_plate_<version>.stl` |
-| **Latest release** | 3.1.0 |
+| **Latest release** | 3.1.0.1 |
 
 ## Versioning
 
@@ -33,6 +33,16 @@ with `head -c 80 file.stl`). The generator's own filename (`jig-plate.py`)
 never changes -- it isn't one of the three.
 
 ---
+
+## 3.1.0.1 — MIT license
+
+Hotfix on 3.1.0. No code change: the plate and coupon geometry are
+unchanged from 3.1.0 (triangle data byte-identical).
+
+### Added
+- `LICENSE` (MIT) on the released branch, so the license applies to 3.1.0
+  as published. The README's license section no longer says all rights
+  are reserved (#10).
 
 ## 3.1.0 — Thin plates, accessible drawings, safer CLI output
 
