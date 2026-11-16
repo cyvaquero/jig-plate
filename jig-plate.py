@@ -17,6 +17,9 @@ export, and the diagrams/technical drawings.
 The debossed text label is parameterized via --label (default "Jig Plate");
 the logo mark next to it is not. See build_plate()'s `label` parameter.
 
+Issue numbers in the Changelog before 3.1.4 refer to the project's
+earlier, non-public tracker, not to this repository's issues.
+
 Changelog
   0.1.0  base design -- magnet bores and corner stacking rib/groove system,
          debossed "Jig Plate" wordmark, no pocket geometry
@@ -855,6 +858,10 @@ Changelog
          watertight; two printers' builds coexist; new tests fail without
          the stem, the header tag or alias resolution; full test suite
          passes.
+  3.1.7  docs only (#11): this docstring and CHANGELOG.md say that issue
+         numbers before 3.1.4 refer to the project's earlier, non-public
+         tracker. Verified: STL triangle data (bytes 80+) byte-identical
+         to 3.1.6; both meshes watertight; full test suite passes.
 """
 import argparse
 import io
@@ -889,7 +896,7 @@ def _solid(color, alpha):
     fg, bg = _to_rgba(color), _to_rgba(BG)
     return tuple(alpha * c + (1 - alpha) * b for c, b in zip(fg[:3], bg[:3])) + (1.0,)
 
-VERSION = "3.1.6"
+VERSION = "3.1.7"
 OUT_DIR = Path(__file__).resolve().parent / "output"
 IMG_DIR = Path(__file__).resolve().parent / "images"
 
