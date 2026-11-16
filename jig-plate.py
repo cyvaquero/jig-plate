@@ -94,9 +94,9 @@ Changelog
          (new honeycomb_enabled/honeycomb_skin/honeycomb_wall/
          honeycomb_af/honeycomb_margin_x/honeycomb_margin_y params,
          default honeycomb_enabled=True) -- a hex grid of blind pockets
-         cut up from the bottom face, sized to match eu-business-card-jig's
-         vented pocket floor (23.1 mm across flats, 2.6 mm walls), leaving
-         a 2.4 mm top skin. Boundary cells are clipped via boolean
+         cut up from the bottom face, sized to match a companion card
+         jig's vented pocket floor (23.1 mm across flats, 2.6 mm walls),
+         leaving a 2.4 mm top skin. Boundary cells are clipped via boolean
          intersection against the margin field and boolean difference
          against the bottom-corner mounting bores and corner stacking
          rib/groove footprints, rather than dropped whole. Default plate
@@ -862,6 +862,12 @@ Changelog
          numbers before 3.1.4 refer to the project's earlier, non-public
          tracker. Verified: STL triangle data (bytes 80+) byte-identical
          to 3.1.6; both meshes watertight; full test suite passes.
+  3.1.8  docs only (#12): the 2.3.1 note here and CHANGELOG.md's 2.4.0
+         section describe the honeycomb's reference as a companion card
+         jig instead of naming a private repo, and CLAUDE.md no longer
+         points at a path on the maintainer's machine. Verified: STL
+         triangle data (bytes 80+) byte-identical to 3.1.7; both meshes
+         watertight; full test suite passes.
 """
 import argparse
 import io
@@ -896,7 +902,7 @@ def _solid(color, alpha):
     fg, bg = _to_rgba(color), _to_rgba(BG)
     return tuple(alpha * c + (1 - alpha) * b for c, b in zip(fg[:3], bg[:3])) + (1.0,)
 
-VERSION = "3.1.7"
+VERSION = "3.1.8"
 OUT_DIR = Path(__file__).resolve().parent / "output"
 IMG_DIR = Path(__file__).resolve().parent / "images"
 

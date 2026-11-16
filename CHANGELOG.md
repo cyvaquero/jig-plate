@@ -38,6 +38,17 @@ never changes -- it isn't one of the three.
 
 ---
 
+## 3.1.8 — No references to private resources
+
+Iterative (unreleased). Docs only: the plate and coupon geometry are
+unchanged from 3.1.7 (triangle data byte-identical).
+
+### Fixed
+- The 2.4.0 notes here and the 2.3.1 note in the generator's docstring
+  describe the honeycomb's reference as a companion card jig rather than
+  naming a repository readers can't open, and `CLAUDE.md` no longer points
+  at a file on the maintainer's machine (#12).
+
 ## 3.1.7 — Where older issue numbers point
 
 Iterative (unreleased). Docs only: the plate and coupon geometry are
@@ -432,7 +443,7 @@ release.
   skin (`honeycomb_skin`, 2.4 mm) and a honeycomb wall between cells
   (`honeycomb_wall`, 2.6 mm). Cell size (`honeycomb_af`, default 22 mm
   across flats — also exposed as `--honeycomb-af` on the CLI) and
-  orientation match eu-business-card-jig's vented pocket floor. The
+  orientation match a companion card jig's vented pocket floor. The
   lattice is built full-coverage across the margin-inset field
   (`honeycomb_margin_x`/`honeycomb_margin_y`) and then clipped — via a
   boolean intersection against that field and a boolean difference
@@ -453,7 +464,7 @@ rectangular waffle grid on convex-cell packing efficiency, and clipping
 boundary cells (instead of dropping them) recovers material a
 drop-if-it-doesn't-fit grid would otherwise waste at the field edges. The
 22 mm default cell size was chosen over the initial 23.1 mm match to
-eu-business-card-jig as a deliberate, slightly denser trade of a little
+that card jig as a deliberate, slightly denser trade of a little
 extra wall material for a tighter, more supportive lattice.
 
 ### Result
