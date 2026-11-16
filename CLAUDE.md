@@ -8,8 +8,8 @@ those are added on top of this base by blank-specific scripts.
 joint) as binary STL with trimesh and the manifold boolean engine, and
 renders diagrams and technical drawings with matplotlib.
 
-The global rules in `~/.claude/CLAUDE.md` and its skills apply in full;
-this file holds only what is specific to this repo.
+The maintainer's global Claude Code rules apply in full; this file holds
+only what is specific to this repo.
 
 ## Two files, two roles
 
