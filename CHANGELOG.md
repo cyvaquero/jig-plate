@@ -5,7 +5,7 @@
 | **Generator (CLI)** | `jig-plate.py` |
 | **Generator (library)** | `jig_plate_base.py` (`build_plate()`) |
 | **Meshes** | `jig_plate_<version>.stl`, or `jig_plate_<version>_<printer>.stl` with `--printer` |
-| **Latest release** | 3.1.0 |
+| **Latest release** | 3.1.0.1 |
 
 ## Versioning
 
@@ -26,9 +26,10 @@ the major or minor version (at its merge into `main`), the iterative
 entries it covers are squashed into that release's section; git history
 keeps the originals.
 
-Issue numbers in entries before 3.1.4 refer to the project's earlier,
-non-public tracker, so they don't match this repository's issues. From
-3.1.4 on, they refer to this repository.
+Issue numbers in entries before 3.1.4, other than the 3.1.0.1 hotfix,
+refer to the project's earlier, non-public tracker, so they don't match
+this repository's issues. The 3.1.0.1 hotfix and 3.1.4 on refer to this
+repository.
 
 Each version's number appears in three places and they are kept in sync: the
 `VERSION` constant in `jig-plate.py` (also mirrored in `pyproject.toml`),
@@ -157,6 +158,16 @@ unchanged from 3.1.0 (triangle data byte-identical).
 - Not covered, because no input reaches them through `build_plate()`: the
   fit check's skip of a feature with no bounds, and its "extends below the
   bottom face" error for a stacking rib (#68). Removed in 3.1.2.
+
+## 3.1.0.1 — MIT license
+
+Hotfix on 3.1.0. No code change: the plate and coupon geometry are
+unchanged from 3.1.0 (triangle data byte-identical).
+
+### Added
+- `LICENSE` (MIT) on the released branch, so the license applies to 3.1.0
+  as published. The README's license section no longer says all rights
+  are reserved (#10).
 
 ## 3.1.0 — Thin plates, accessible drawings, safer CLI output
 

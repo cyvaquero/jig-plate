@@ -17,8 +17,9 @@ export, and the diagrams/technical drawings.
 The debossed text label is parameterized via --label (default "Jig Plate");
 the logo mark next to it is not. See build_plate()'s `label` parameter.
 
-Issue numbers in the Changelog before 3.1.4 refer to the project's
-earlier, non-public tracker, not to this repository's issues.
+Issue numbers in the Changelog before 3.1.4, other than the 3.1.0.1
+hotfix, refer to the project's earlier, non-public tracker, not to this
+repository's issues.
 
 Changelog
   0.1.0  base design -- magnet bores and corner stacking rib/groove system,
@@ -799,6 +800,11 @@ Changelog
          README drawings). Verified: STL triangle data (bytes 80+)
          byte-identical to 3.0.0 and 3.0.11; both meshes watertight;
          full test suite passes (199); drawings viewed.
+  3.1.0.1 hotfix: MIT license (#10): adds LICENSE to the released
+         branch and replaces the README's "no license" line. No code
+         change. Verified: STL triangle data (bytes 80+) byte-identical
+         to 3.1.0; both meshes watertight; full test suite passes;
+         drawings viewed.
   3.1.1  tests only (#68): six new tests (205 in all) cover label-cutter
          and write_atomic paths no test reached: the buffer(0) repair of
          an invalid glyph polygon, the empty/tiny-piece skip in the three
